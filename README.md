@@ -31,6 +31,6 @@ Debora L. Gisch<sup>1</sup>* , Michelle Brennan<sup>2</sup>* , Blue B. Lake<sup>
 
 
 
-led by [Eadon's Lab](https://medicine.iu.edu/faculty-labs/eadon) and support by two consortia [KPMP](https://www.kpmp.org/) and [huBMAP](https://hubmapconsortium.org/).
+Led by [Eadon's Lab](https://medicine.iu.edu/faculty-labs/eadon) and support by two consortia [KPMP](https://www.kpmp.org/) and [huBMAP](https://hubmapconsortium.org/).
 
 
