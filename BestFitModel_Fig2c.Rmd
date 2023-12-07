@@ -1,0 +1,234 @@
+---
+title: "Fig 2c "
+output: html_notebook
+---
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(stringr)
+library(patchwork)
+library(rio)
+library(tibble)
+library(psych)
+library(tidyverse)
+library(ggpubr)
+set.seed(1234)
+```
+
+```{r}
+dir.create("Fig2c")
+output <- "Fig2c/"
+```
+
+```{r}
+final_table <- rio::import_list(paste0(output,"BestModelDATA.xlsx"))
+
+```
+
+```{r}
+names(final_table)
+tam <- 15
+p1 <- final_table
+##Best mRNA
+#TI
+protti_one <- data.frame()
+for (pl in c("DNAmCpGIsland.mRNA",
+             "DNAmExon.mRNA",
+             "DNAmIntron.mRNA",
+             "DNAmPromoter.mRNA")) {
+  protti_one <- rbind(protti_one, p1[[pl]])
+}
+
+all_mt <- data.frame(protti_one)
+length(unique(all_mt$annot.symbol))
+all_mt <-  all_mt[all_mt$annot.type != 'hg38_gene_body', ]
+length(unique(all_mt$annot.symbol))
+genes_protein <- unique(all_mt$annot.symbol)
+
+
+
+all_mt$cut <-
+  as.numeric(all_mt$log2FC.DNA) * as.numeric(all_mt$log2FC.mRNA)
+all_mt <- data.table(all_mt)
+all_mt <- all_mt[all_mt[, .I[which.min(cut)], by = annot.symbol]$V1]
+all_mt$cols <- as.integer(factor(all_mt$annot.type))
+my_cols <- c('#f8766d', "#7cae00", '#00bfc4', "#c77cff")
+pairs.panels(
+  all_mt[, c('log2FC.DNA', 'log2FC.mRNA')],
+  method = "pearson",
+  # correlation method
+  hist.col = "deepskyblue2",
+  fill = my_cols[all_mt$cols],
+  density = TRUE,
+  # show density plots
+  lm = TRUE,
+  ellipses = FALSE,
+  # show correlation ellipses
+  main = paste0("DNAm and Proteins correlation \n N=", nrow(all_mt))
+)
+
+table(all_mt$annot.type)
+p1[["BestModel_DNAmXmRNA"]] <- all_mt
+lm.a <- lm(log2FC.mRNA ~ log2FC.DNA, all_mt)
+sum_look <- summary(lm.a)
+corr_all <-
+  round(cor(all_mt$log2FC.DNA, all_mt$log2FC.mRNA), digits = 2)
+aux <- all_mt[annot.type == 'hg38_cpg_islands']
+corr_cpg <- round(cor(aux$log2FC.DNA, aux$log2FC.mRNA), digits = 2)
+aux <- all_mt[annot.type == 'hg38_genes_exons']
+corr_exon <- round(cor(aux$log2FC.DNA, aux$log2FC.mRNA), digits = 2)
+aux <- all_mt[annot.type == 'hg38_genes_introns']
+corr_intron <- round(cor(aux$log2FC.DNA, aux$log2FC.mRNA), digits = 2)
+aux <- all_mt[annot.type == 'hg38_genes_promoters']
+corr_prom <- round(cor(aux$log2FC.DNA, aux$log2FC.mRNA), digits = 2)
+
+all_ti <-
+  ggplot(all_mt, aes(x = log2FC.DNA, y = log2FC.mRNA, color = annot.type)) +
+  geom_point(size = 1, ) +
+  geom_abline(slope = lm.a[["coefficients"]][["log2FC.DNA"]],
+              color = "black",
+              size = 1.5) +
+  geom_smooth(method = "lm") +
+  geom_hline(yintercept = 0, size = 0.5) + geom_vline(xintercept = 0, size =
+                                                        0.5) +
+  
+  labs(
+    subtitle = paste0(
+      ' All annotation: N = ' ,
+      nrow(all_mt) ,
+      ', Corr = ',
+      corr_all,
+      " R2 ",
+      round(sum_look$r.squared, 2),
+      "Res",
+      round(sum_look$sigma, 2),
+      '\n CpG Island: N = ' ,
+      length(which(all_mt$annot.type == "hg38_cpg_islands")) ,
+      ', Corr = ',
+      corr_cpg,
+      '\n Exon: N = ' ,
+      length(which(all_mt$annot.type == "hg38_genes_exons")) ,
+      ', Corr = ',
+      corr_exon,
+      '\n Intron  N = ',
+      length(which(
+        all_mt$annot.type == "hg38_genes_introns"
+      )),
+      ', Corr = ',
+      corr_intron,
+      '\n Promoter N = ',
+      length(which(
+        all_mt$annot.type == "hg38_genes_promoters"
+      )),
+      ', Corr = ',
+      corr_prom
+    )
+  ) +
+  xlab('TI GLOM \n DNAm') +
+  ylab('mRNA \n TI GLOM') +
+  theme_classic() +
+  theme(axis.text = element_text(size = tam),
+        axis.title = element_text(size = tam, face = "bold"),
+  )
+p1[["best_mRNA_corr"]] <- plot(all_ti)
+faithful <- mutate(all_mt, group = cols)
+scatterplot <-
+  ggplot(faithful, aes(as.numeric(log2FC.DNA), as.numeric(log2FC.mRNA), color = annot.type)) +
+  geom_hline(yintercept = 0,
+             color = "lightgrey",
+             linetype = "dashed") +
+  geom_vline(xintercept = 0,
+             color = "lightgrey",
+             linetype = "dashed") +
+  geom_point(alpha = 0.5) +
+  geom_abline(slope = lm.a[["coefficients"]][["log2FC.DNA"]],
+              color = "#453E3E",
+              size = 1.5) +
+  ylim(min(all_mt$log2FC.mRNA), max(all_mt$log2FC.mRNA)) +
+  labs(
+    subtitle = paste0(
+      ' All annotation: N = ' ,
+      nrow(all_mt) ,
+      ', Corr = ',
+      corr_all,
+      " R2 ",
+      round(sum_look$r.squared, 2),
+      " Res ",
+      round(sum_look$sigma, 2),
+      '\n CpG Island: N = ' ,
+      length(which(all_mt$annot.type == "hg38_cpg_islands")) ,
+      ', Corr = ',
+      corr_cpg,
+      '\n Exon: N = ' ,
+      length(which(all_mt$annot.type == "hg38_genes_exons")) ,
+      ', Corr = ',
+      corr_exon,
+      '\n Intron  N = ',
+      length(which(
+        all_mt$annot.type == "hg38_genes_introns"
+      )),
+      ', Corr = ',
+      corr_intron,
+      '\n Promoter N = ',
+      length(which(
+        all_mt$annot.type == "hg38_genes_promoters"
+      )),
+      ', Corr = ',
+      corr_prom
+    )
+  ) +
+  theme_classic() +
+  theme(axis.text = element_blank(), axis.title = element_blank())
+
+
+legend <-
+  as_ggplot(get_legend(scatterplot)) + ylim(min(all_mt$log2FC.mRNA), max(all_mt$log2FC.mRNA))
+scatterplot <- scatterplot + theme(legend.position = "none") +
+  scale_colour_manual(values = my_cols)
+
+
+boxplot_left <-
+  ggplot(faithful, aes(correlation, as.numeric(log2FC.mRNA), fill = annot.type)) +
+  geom_violin() +
+  ylim(min(all_mt$log2FC.mRNA), max(all_mt$log2FC.mRNA)) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank()
+  ) + scale_colour_manual(values = my_cols)
+boxplot_bottom <-
+  ggplot(faithful, aes(correlation, as.numeric(log2FC.DNA), fill = annot.type)) +
+  geom_violin() +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.title.y = element_blank()
+  ) +
+  coord_flip() +
+  scale_colour_manual(values = my_cols)
+
+top <-
+  wrap_plots(boxplot_left,
+             scatterplot,
+             ncol = 2,
+             widths = c(0.1, 0.4))
+bottom <-
+  wrap_plots(legend,
+             boxplot_bottom,
+             ncol = 2,
+             widths = c(0.1, 0.4))
+
+p1[["best_mRNA_distribution"]] <-
+  wrap_plots(top, bottom, nrow = 2, heights = c(0.5, 0.225))
+
+
+pdf(paste0(output, "mRNA_best_model_with_distribution.pdf"))
+wrap_plots(top, bottom, nrow = 2, heights = c(0.5, 0.225))
+dev.off()
+```
+

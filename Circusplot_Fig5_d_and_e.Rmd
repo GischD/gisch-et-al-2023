@@ -1,0 +1,74 @@
+```{r}
+library(circlize)
+
+set.seed(999)
+npdf <- rio::import("data/MAP_aPTxPT_tripod_result.RDS")
+df <- npdf$TRIPOD_analyse_method_1
+
+```
+
+```{r}
+
+#SLC5A12
+aux <-
+  df[(df$Gene.link_TP == "PROM1") & df$NewPeak_DA == "NP",]
+p <- list()
+ca <- "name.pk_Annot"
+cb <- "Gene.TF_TP"
+jump <-
+  ifelse(is.numeric(aux[, ca]) |
+           is.numeric(aux[, cb]), next, "")
+print(paste0(ca, "_", cb))
+tf <- data.frame()
+for (g in unique(aux[, ca])) {
+  jump <-
+    ifelse(is.numeric(aux[, ca]) |
+             is.numeric(aux[, cb]), next, "")
+  for (i in unique(aux[, cb])) {
+    aux0 <- aux[aux[, ca] == g & aux[, cb] == i, cb]
+    jump <- ifelse(is_empty(aux0), next, "")
+    aux1 <- data.frame(table(aux0))
+    
+    aux1$A <- g
+    colnames(aux1) <- c("B", "Freq", "A")
+    tf <- rbind(tf, aux1)
+    tf <- tf[, c("A", "B", "Freq")]
+    
+    grid.col <-
+      setNames(rainbow(length(unlist(dimnames(
+        tf
+      )))), union(rownames(tf), colnames(tf)))
+  }
+}
+par(mar = rep(2, 4))
+p <- plot(pcc)
+pcc <- chordDiagram(
+  tf,
+  link.sort = TRUE,
+  link.decreasing = TRUE,
+  preAllocateTracks = 1,
+  grid.col = grid.col
+)
+
+title(main = paste0(ca, "_", cb))
+circos.trackPlotRegion(
+  track.index = 1,
+  panel.fun = function(x, y) {
+    xlim = get.cell.meta.data("xlim")
+    ylim = get.cell.meta.data("ylim")
+    sector.name = get.cell.meta.data("sector.index")
+    circos.text(
+      mean(xlim),
+      ylim[1] + .1,
+      sector.name,
+      facing = "clockwise" ,
+      niceFacing = TRUE,
+      adj = c(0, .5),
+      col = "lightgray"
+    )
+  },
+  bg.border = NA
+)
+circos.clear()
+dev.off()
+```

@@ -1,0 +1,104 @@
+---
+title: "Figure Fig3a_and_3b "
+output: html_notebook
+---
+
+```{r}
+library(Seurat)
+library(Signac)
+library(SeuratDisk)
+```
+
+```{r}
+#readRDS("PT/")
+dir.create("Fig3a_and_3b")
+
+date <-  format(Sys.time(), "%a_%b_%d")
+dataout <- "Fig3a_and_3b"
+```
+
+```{r}
+pbmc <-pbmc <- LoadH5Seurat("raw_snATAC_and_snRNA_human_kidney.h5Seurat") 
+DefaultAssay(pbmc) <- 'ATAC'
+
+b.inputpath <- "../../R_paper/ATAC/blue/"
+frags <- Fragments(pbmc)  # get list of fragment objects
+  # remove fragment information from assay
+new.paths <- list.files(b.inputpath,pattern='10X_Dual')
+for (i in seq_along(frags)) {
+  frags[[i]] <- UpdatePath(frags[[i]], new.path = paste0(b.inputpath,new.paths[[i]],'/atac_fragments.tsv.gz')) # update path
+}
+Fragments(pbmc) <- NULL
+Fragments(pbmc) <- frags # assign updated list back to the object
+
+```
+
+
+
+```{r}
+pbmc@meta.data[["PTS12_aTAL12"]] <-
+  ifelse((pbmc@meta.data[["subclass.l2"]] == 'PT-S1'
+  |
+  pbmc@meta.data[["subclass.l2"]] == 'PT-S2'),
+  'PT-S12',
+  ifelse((pbmc@meta.data[["subclass.l2"]] == 'aTAL1'
+  |
+  pbmc@meta.data[["subclass.l2"]] == 'aTAL2'),
+  'aTAL',
+  pbmc@meta.data[["subclass.l2"]]
+  )
+  )
+Idents(pbmc) <- 'PTS12_aTAL12'
+```
+# RNA analysis
+```{r}
+set.seed(1234)
+
+DefaultAssay(pbmc) <- "RNA"
+
+pbmc <- SCTransform(pbmc, verbose = FALSE) %>% RunPCA() %>% RunUMAP(dims = 1:50, reduction.name = 'umap.rna', reduction.key = 'rnaUMAP_')
+```
+
+# ATAC analysis
+```{r}
+# We exclude the first dimension as this is typically correlated with sequencing depth
+DefaultAssay(pbmc) <- "ATAC"
+pbmc <- RunTFIDF(pbmc)
+pbmc <- FindTopFeatures(pbmc, min.cutoff = 'q0')
+pbmc <- RunSVD(pbmc)
+pbmc <- RunUMAP(pbmc, reduction = 'lsi', dims = 2:50, reduction.name = "umap.atac", reduction.key = "atacUMAP_")
+```
+
+# WNN
+```{r}
+pbmc <- FindMultiModalNeighbors(pbmc, reduction.list = list("pca", "lsi"), dims.list = list(1:50, 2:50))
+pbmc <- RunUMAP(pbmc, nn.name = "weighted.nn", reduction.name = "wnn.umap", reduction.key = "wnnUMAP_")
+pbmc <- FindClusters(pbmc, graph.name = "wsnn", algorithm = 3, verbose = FALSE)
+```
+```{r}
+color <- rio::import_list("data/Epigenomic_paper_colors.xlsx")
+color <- color$subclass.l2
+color <- color[color$celltype %in% unique(pbmc$subclass.l2),]
+color$myColor <- ifelse(color$celltype %in% c("aTAL1","aTAL2","C-TAL","POD","aPT","PT-S1","PT-S2","PT-S3"),color$myColor,"grey80")
+pbmc$subclass.l2 <- factor(pbmc$subclass.l2,levels = color$celltype)
+
+
+Idents(pbmc) <- pbmc$subclass.l2
+
+```
+
+
+Color
+
+```{r}
+
+p1 <- DimPlot(pbmc, reduction = "umap.rna", cols = color$myColor,label = TRUE, label.size = 2.5, repel = TRUE) + ggtitle("RNA")
+
+
+p2 <- DimPlot(pbmc, reduction = "umap.atac", cols = color$myColor, label = TRUE, label.size = 2.5, repel = TRUE) + ggtitle("ATAC")
+
+p3 <- DimPlot(pbmc, reduction = "wnn.umap", cols = color$myColor, label = TRUE, label.size = 2.5, repel = TRUE) + ggtitle("WNN")
+
+p <- p1 + p2 + p3 & NoLegend()&theme(plot.title = element_text(hjust = 0.5))
+p
+```

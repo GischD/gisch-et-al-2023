@@ -1,0 +1,199 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(pathfindR)
+library(grid)
+library(data.table)
+library(ggplot2)
+```
+Figure 4f
+```{r}
+find <- list()
+sco <- rio::import("data/MAP_aPTxPT_tripod_result.RDS")
+sco <- sco$TRIPOD_analyse_method_1
+```
+
+```{r}
+gene_b <- unique(sco[sco$Gene.link_TP_pv.adj_DE<0.05 & sco$DNAme.Hypo.Dip_Annot=="TRUE" & (sco$ACT_ENH_REP %in% c("ACT","ENH","REP")), c(1,31,32)]) 
+DE <- gene_b[,c(1,2,3)]
+info <-  "Pathway_SupFig9e_and_Fig8d" #"TRIPOD_PVadj0p05_ATAC_DNAm_CUTRUN"
+DE$Gene.link_TP_avg.log2FC_DE <- as.numeric(DE$Gene.link_TP_avg.log2FC_DE)
+DE$Gene.link_TP_pv.adj_DE <- as.numeric(DE$Gene.link_TP_pv.adj_DE)
+colnames(DE) <- c("gene","LogFC","adj.pv")
+```
+
+
+```{r,fig.keep=T}
+dir.create("Pathway_SupFig9e_and_Fig8d")
+dir <- "Pathway_SupFig9e_and_Fig8d"
+find[["PT"]][["info"]] <-  "TRIPOD_PVadj0p05_ATAC_DNAm_CUTRUN"
+find[["PT"]][["DE"]] <- DE
+```
+
+
+
+```{r}
+#TO BUILD THE LINKS 
+namepath <-"Biogrid"
+#Pathway Enrichment 
+geneset <-  "GO-All"
+
+#this step take a while to run but need to be run once by tupla of dataset
+##########################################################################
+i <- 1
+j <- 1
+set.seed(147)
+path_datameans <- paste0(dir,"/")
+output_df <- run_pathfindR(DE, output_dir = paste0(path_datameans,namepath[j],'_',geneset[i],'_PT/'),
+                           gene_sets = geneset[i],
+                           min_gset_size = 1,
+                           max_gset_size = 500,
+                           p_val_threshold=0.05,
+                           pin_name_path = namepath[j],
+                           plot_enrichment_chart=FALSE,
+                           n_processes = 3
+)
+
+saveRDS(output_df, paste0(path_datameans,"PT_output_df_Trans_Net_",namepath[j],"_List_",geneset[i],".RDS"))
+#output_df <- readRDS(paste0(path_datameans,path_datameans,"output_df_Trans_Net_",namepath[j],"_List_",geneset[i],".RDS"))
+find[["PT"]][[paste0("PT_output_df_Trans_Net_",namepath[j],"_List_",geneset[i])]] <- output_df
+```
+
+
+```{r}
+#You cad loud the output_df from the file below
+find <- readRDS(paste0(path_datameans,"information_enrichment_analyse_aPTxPTS12.xlsx"))
+
+output_df <- find$PT$`PT_output_df_Trans_Net_Biogrid_List_GO-All`
+#output_df <- readRDS(paste0(path_datameans,"output_df_Trans_Net_",namepath[j],"_List_",geneset[i],".RDS"))
+# using "KEGG" as our gene sets for enrichment
+geneset_list <- fetch_gene_set(gene_sets = geneset[i],
+                               min_gset_size = 1,
+                               max_gset_size = 500)
+geneset_gsets <- geneset_list[[1]]
+geneset_descriptions <- geneset_list[[2]]
+
+
+allinfo <-  output_df 
+allinfo$network <- namepath[j]
+allinfo$genelist <- geneset[i]
+geneset_list$genes_by_term <- lapply(geneset_list$genes_by_term, function(x) paste(x,collapse=', '))
+info <- as.data.table(geneset_list)
+info$ID2 <- names(geneset_list[["genes_by_term"]])
+final_data <- merge(allinfo,info ,by.x = "ID",by.y = "ID2",  all.x=TRUE)
+final_data$genes_by_term <- unlist(final_data$genes_by_term)
+find[["PT"]][[paste0("enrichment_pathway_Net_",namepath[j],"_List_",geneset[i])]] <- final_data
+RA_clustered <- cluster_enriched_terms(output_df, plot_dend = FALSE, plot_clusters_graph = FALSE,use_description=TRUE)
+#TOP 15 clusters
+RA_selected <- subset(RA_clustered,Cluster %in% 1:15)
+###########################################PLOTS
+
+plot(enrichment_chart(RA_selected, plot_by_cluster = TRUE))
+
+find[["PT"]][["run_pathfindR"]] <- output_df 
+find[["PT"]][["cluster_enriched_terms"]] <- RA_clustered 
+
+saveRDS(find,paste0(path_datameans,"information_enrichment_analyse_aPTxPTS12.xlsx"))
+```
+
+
+
+
+
+
+
+
+
+
+Figure7 d
+
+
+
+```{r}
+find <- list()
+sco <- readRDS("data/MAP_aTALxCTAL_tripod_result.RDS")#rio::import("../scMega_TAL/Dec_30/TRIPOD.MAR.7.2023_notreshold_aTALxCTAL.RDS")  
+sco <- sco$DE_aTALxCTAL
+sco <- sco[order(abs(sco$avg.log2FC_DE),decreasing = T),]
+gene_b <- sco[sco$pv.adj_DE<0.05,]
+DE <- gene_b[1:300,c(1,3,6)]
+colnames(DE) <- c("gene","LogFC","adj.pv")
+
+DE$LogFC <- as.numeric(DE$LogFC)
+DE$adj.pv <- as.numeric(DE$adj.pv)
+
+```
+
+```{r}
+dir.create("Pathway_SupFig9e_and_Fig8d")
+dir <- "Pathway_SupFig9e_and_Fig8d"
+find[["TAL"]][["info"]] <-  "aTALxCTAL_PVadj0p05_300DE" 
+find[["TAL"]][["DE"]] <- DE
+```
+```{r}
+#TO BUILD THE LINKS 
+namepath <-"Biogrid"
+#Pathway Enrichment 
+geneset <-  "GO-All"
+
+#this step take a while to run but need to be run once by tupla of dataset
+##########################################################################
+ i <- 1
+ j <- 1
+
+set.seed(147)
+path_datameans <- paste0(dir,"/")
+output_df <- run_pathfindR(DE, output_dir = paste0(path_datameans,namepath[j],'_',geneset[i],'_TAL/'),
+                           gene_sets = geneset[i],
+                           min_gset_size = 1,
+                           max_gset_size = 500,
+                           p_val_threshold=0.05,
+                           pin_name_path = namepath[j],
+                           plot_enrichment_chart=FALSE,
+                           n_processes = 3
+)
+
+find[["TAL"]][[paste0("Net_",namepath[j],"_List_",geneset[i])]] <- output_df
+
+```
+
+
+```{r}
+geneset_list <- fetch_gene_set(gene_sets = geneset[i],
+                               min_gset_size = 1,
+                               max_gset_size = 500)
+geneset_gsets <- geneset_list[[1]]
+geneset_descriptions <- geneset_list[[2]]
+allinfo <-  output_df 
+allinfo$network <- namepath[j]
+allinfo$genelist <- geneset[i]
+geneset_list$genes_by_term <- lapply(geneset_list$genes_by_term, function(x) paste(x,collapse=', '))
+info <- as.data.table(geneset_list)
+info$ID2 <- names(geneset_list[["genes_by_term"]])
+final_data <- merge(allinfo,info ,by.x = "ID",by.y = "ID2",  all.x=TRUE)
+final_data$genes_by_term <- unlist(final_data$genes_by_term)
+find[["TAL"]][[paste0("enrichment_pathway_Net_",namepath[j],"_List_",geneset[i])]] <- final_data
+```
+
+
+```{r,fig.keep="all"}
+find[["TAL"]][[paste0("Net_",namepath[j],"_List_",geneset[i])]] <- output_df
+RA_clustered <- cluster_enriched_terms(output_df, plot_dend = FALSE, plot_clusters_graph = FALSE,use_description=TRUE)
+RA_selected <- subset(RA_clustered,Cluster %in% 1:15)
+find[["TAL"]][["cluster_enriched_terms"]] <- RA_clustered
+find[["TAL"]][["15_cluster_enriched_terms"]] <- RA_selected
+#Original plot
+plot(enrichment_chart(RA_selected, plot_by_cluster = TRUE))
+#Plot the main pathway for the manuscript
+RA_selected <- rio::import("Pathway_SupFig9e_and_Fig8d/short_information_enrichment_analyse_aTALxCTAL.xlsx")
+plot(enrichment_chart(RA_selected, plot_by_cluster = TRUE))
+
+rio::export(find,file=paste0(path_datameans,"information_enrichment_analyse_aTALxCTAL.xlsx"))
+```
+
+
+```{r,fig.keep="all"}
+
+
+```

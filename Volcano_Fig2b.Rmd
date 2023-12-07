@@ -1,0 +1,91 @@
+---
+title: "Figure 2b"
+output: html_notebook
+---
+
+```{r}
+library(data.table)
+library(EnhancedVolcano)
+library(stringr)
+library(patchwork)
+data <-  format(Sys.time(), "%a_%b_%d")
+```
+
+
+```{r}
+output <- "Fig2b/"
+#Data supplemental table 2
+diff <- paste0(output,'DiffDNAm_bygene_byall_methylkitobj_0.001_220617_T5.csv')
+df <- read.csv(paste0(diff))
+colnames(df) <- c("gene","annot.type", "ml.glom",
+                  "ml.ti","log2FC","pvalue.t.test" )
+df.gene <- df
+goal_gene <- c('PTPRQ', 'WT1', 'NTNG1', 'NPHS1', 'NPHS2', 'CLIC5', 'PODXL',
+               'CASR', 'SLC12A1', 'UMOD','ESRRB', 'EGF', 'GP2', 'TMEM52B', 'CLDN16', 'WNK1',
+               'LRP2','CUBN', 'SLC13A1', 'SLC5A12', 'SLC13A3', 'SLC22A6','SLC5A2','MIOX', 'FUT6','PDZK1',
+               'NELL1','ACTB')
+p <- list()
+marker <- unique(df$annot.type)
+ct <- c(1,3,3,3,3,4,4,2,2,2,1.5)
+for (i in 1:length(marker)){
+pdf(paste0(output,'DiffDNAm_',marker[i],'volcano_',data,'.pdf'),width = 5.5,height = 5)
+bou <- ct[i]
+df_1 <- df[df$annot.type==marker[i],]
+
+
+keyvals <- ifelse(
+  (df_1$log2FC < 0 & df_1$pvalue.t.test<0.05), '#bb001e',
+  ifelse((df_1$log2FC > 0 & df_1$pvalue.t.test<0.05), '#113891',
+         'grey'))
+
+
+
+alphavp <- ifelse(
+  (df_1$log2FC < 0 & df_1$pvalue.t.test<0.05 & df_1$gene %in% goal_gene), 1,
+  ifelse((df_1$log2FC > 0 & df_1$pvalue.t.test<0.05 & df_1$gene %in% goal_gene), 1,
+          1/10))
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == '#113891'] <- 'Diff. DNAm GLOM'
+names(keyvals)[keyvals == 'grey'] <- 'p-value NS'
+names(keyvals)[keyvals == '#bb001e'] <- 'Diff DNAm TI'
+
+
+ p[[i]] <-
+   EnhancedVolcano(df_1,
+                lab = df_1$gene,
+                labSize = 3.5, 
+                labCol = 'black',
+                colAlpha = alphavp,
+                labFace = 'bold',
+                 selectLab = goal_gene,
+                colCustom = keyvals,
+                boxedLabels = F,
+                drawConnectors = T,
+                colConnectors = 'grey50',
+                arrowheads = FALSE,
+                widthConnectors = .2,
+                min.segment.length=.001,
+                maxoverlapsConnectors = 100,
+                ylim = 0.00000000001,
+                xlim <- c(-bou,bou),
+                pointSize = 1,
+                legendLabSize = 10,
+                legendIconSize = 3,
+                x = 'log2FC',
+                y = 'pvalue.t.test',
+                pCutoff = .05,
+                FCcutoff = 0,
+                title='TI GLOM',
+                subtitle = paste0('Diff. DNAm ',marker[i]),
+                xlab = bquote(~Log[2]~ 'FC'),
+                ylab =   bquote(~-Log[10]~'p-value'),
+                gridlines.major = FALSE,
+                gridlines.minor = FALSE,
+                lengthConnectors = unit(0.05, "npc"),
+                )
+plot(p[[i]]) 
+dev.off()
+
+}
+```
+

@@ -1,0 +1,116 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(data.table)
+library(ggplot2)
+```
+
+
+
+```{r}
+dir.create("Fig3i")
+output <- "Fig3i/"
+```
+
+```{r}
+YNtable <-rio::import("Fig3i/YN_ALL_TECNOLOGIES_Sun_Nov_20.RDS")
+```
+
+
+
+```{r}
+cell.type <- data.frame(YNtable)
+cell.type <- cell.type[,c(6:15)]
+#cell.type <- na.omit(cell.type)
+tec1 <- colnames(cell.type)
+tec2 <- colnames(cell.type)
+matrix.g <- data.frame()
+############################################################################################
+for (tec in colnames(cell.type)){
+    for (tec2 in colnames(cell.type)){
+  
+  sub.cell.type <- cell.type[,c(tec,tec2)]
+  sub.cell.type <- na.omit(sub.cell.type)
+  t.yy <- nrow(sub.cell.type[(sub.cell.type[,tec]=='Y'& sub.cell.type[,tec2]=='Y'),])
+  t.yn <- nrow(sub.cell.type[(sub.cell.type[,tec]=='Y'& sub.cell.type[,tec2]=='N'),])
+  t.ny <- nrow(sub.cell.type[(sub.cell.type[,tec]=='N'& sub.cell.type[,tec2]=='Y'),])
+  t.nn <- nrow(sub.cell.type[(sub.cell.type[,tec]=='N'& sub.cell.type[,tec2]=='N'),])
+  print(c(tec,tec2,t.yy,t.yn,t.ny,t.nn,tt=sum(t.yy+t.yn+t.ny+t.nn)))
+  matrix.g <-rbind(matrix.g,c(tec,tec2,t.yy,t.yn,t.ny,t.nn,tt=sum(t.yy+t.yn+t.ny+t.nn))) 
+  
+  }
+}
+
+colnames(matrix.g) <- c('tec1','tec2','YY','YN','NY','NN','Total')
+```
+```{r}
+mat_result_f <- matrix.g
+mat_result_f$p.value <- 1
+mat_result_f$odds <- 0
+for (i in 1:nrow(mat_result_f)){
+  ft <- fisher.test(matrix(as.numeric(mat_result_f[i,3:6]),ncol=2))
+  mat_result_f[i,'p.value'] <- ft$p.value
+  mat_result_f[i,'odds'] <- ft$estimate
+}
+
+
+#write.csv(mat_result_f,paste0("raw_fisher_exact_test.csv"),quote = F,row.names = F)
+#mat_result_f <- rio::import(file = paste0("raw_fisher_exact_test.csv"))
+```
+
+
+
+```{r}
+new_mat_result_f <- data.table(mat_result_f[is.finite(mat_result_f$odds),])
+tec3 <- c("M.ATAC.seq","ATAC.seq","H3K27Ac","H3K27me3","H3K4me3","H3K4me1","DNAm.GLOM","DNAm.TI","Diff.GLOM",
+    "Diff.TI")
+teste <- new_mat_result_f[grep(paste(tec3, collapse="|"), c(tec1))]
+teste <- teste[grep(paste(tec3, collapse="|"), c(tec2))]
+new_mat_result_f <- teste
+new_mat_result_f$p.value <- ifelse(new_mat_result_f$p.value==0,1.0e-200,new_mat_result_f$p.value)
+ord <- c(1,2,3,4,5,6,7,8,9,10)
+new_mat_result_f$tec1 <- factor(new_mat_result_f$tec1,
+                                levels = unique(new_mat_result_f$tec1)[ord])
+new_mat_result_f$tec2 <- factor(new_mat_result_f$tec2,
+                                levels = unique(new_mat_result_f$tec1)[rev(ord)])
+new_mat_result_f<- new_mat_result_f[new_mat_result_f$tec1!=new_mat_result_f$tec2,]
+ 
+new_mat_result_f$tec1 <- factor(new_mat_result_f$tec1,levels = c("M.ATAC.seq","ATAC.seq","DNAm.TI","DNAm.GLOM","Diff.TI","Diff.GLOM","H3K27Ac","H3K4me3","H3K4me1", "H3K27me3"))
+new_mat_result_f$tec2 <- factor(new_mat_result_f$tec2,levels = rev(c("M.ATAC.seq","ATAC.seq","DNAm.TI","DNAm.GLOM","Diff.TI","Diff.GLOM","H3K27Ac","H3K4me3","H3K4me1", "H3K27me3")))
+
+pdf(paste0(outpathway,'MAR9_withDiffDNA_fisher.teste.WITH_humphrey.pdf'),width = 4.5,height = 4)
+ggplot(new_mat_result_f,aes(x=tec1,y=tec2,color=log10(odds),size=-log10(p.value)))+
+  geom_point()+
+  scale_color_gradient2(low = "white",high='red') +
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))+
+  ggtitle("")+
+  xlab('')+
+  ylab('')
+dev.off()
+```
+
+
+
+
+```{r}
+
+te <- new_mat_result_f[!new_mat_result_f$tec1 %in% c("ATAC.seq","Diff.TI","Diff.GLOM") & !new_mat_result_f$tec2 %in% c("ATAC.seq","Diff.TI","Diff.GLOM"), ]
+
+te$tec1 <- factor(te$tec1,levels = c("M.ATAC.seq","DNAm.TI","DNAm.GLOM","Diff.TI","Diff.GLOM","H3K27Ac","H3K4me3","H3K4me1", "H3K27me3"))
+
+te$tec2 <- factor(te$tec2,levels = rev(c("M.ATAC.seq","DNAm.TI","DNAm.GLOM","Diff.TI","Diff.GLOM","H3K27Ac","H3K4me3","H3K4me1","H3K27me3")))
+te <- na.omit(te)
+
+ggplot(te,aes(x=tec1,y=tec2,color=log10(odds),size=-log10(p.value)))+
+  geom_point()+
+  scale_color_gradient2(low = "white",high='red') +
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))+
+  ggtitle("")+
+  xlab('')+
+  ylab('')
+```

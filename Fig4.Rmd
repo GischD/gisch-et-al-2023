@@ -1,0 +1,537 @@
+---
+title: "Figure 4"
+output: html_notebook
+---
+
+```{r}
+library(Nebulosa)
+library(Seurat)
+library(Signac)
+library(scMEGA)
+library(stringr)
+```
+
+```{r}
+dir.create("Fig4")
+output <- "Fig4/"
+```
+
+
+Figure 4.a (scMEGA data)
+```{r}
+obj <- readRDS("../scMega/aPTxPTS12_cor90_seed1234_DEC2.RDS")  #aPTxPTS12_cor40_seed1234_NOV26.RDS
+```
+
+```{r}
+cols <- c("#467a3c","#A82400","#F03B00" )
+set.seed(1234)
+```
+# Figure 4b Diffusion Map (DM) cell type and trajectory from scMEGA
+```{r,fig.keep='last'}
+DefaultAssay(obj) <- 'RNA'
+p1a <- DimPlot(obj, group.by = "subclass.l3", label = TRUE,
+             reduction = "dm", shuffle = TRUE, cols =cols ) 
+
+p1b <- TrajectoryPlot(object = obj,trajectory ="Trajectory",
+                    reduction = "dm",
+                    continuousSet = "blueYellow",
+                    size = 1,
+                   addArrow = FALSE) +
+    xlab("DC_1") + ylab("DC_2") +
+    ggtitle("Trajectory")
+plot(p1a) | plot(p1b)
+```
+
+Figure 4c Feature plots in DM
+```{r,fig.keep='all', fig.show='hold'}
+DefaultAssay(obj) <- 'RNA'
+p2 <- list()
+g <-  c("ITGB3","PROM1","TPM1","PDZK1","SLC5A12","RXRA")
+for (i in g){  
+  
+p2[[i]] <- plot_density(obj,
+               features = i,
+               reduction = "dm",
+               pal = "magma")
+plot(p2[[i]])
+}
+
+pdf("Fig4b_Fev13_2023.pdf",width = 15, height = 10)
+plot(wrap_plots(p2,ncol = 3))
+dev.off()
+```
+
+
+Figure 4a volcano plot DEGs aPTxPTS12
+```{r}
+date <-  format(Sys.time(), "%a_%b_%d")
+goal_gene <- unique(
+  c(
+    "ELF3",
+     "HNFA4",
+    "NFATC3",
+    "RREB1",
+    "PPRD",
+    "EGR1",
+    "ZEB1",
+    "MEF2A",
+    "FOXP2",
+    "SOX4",
+    "PROMO1",
+    "KLF6",
+    "ITGB3",
+    "KLF10",
+    "PROM1",
+    'LRP2',
+    'CUBN',
+    'SLC13A1',
+    'SLC5A12',
+    'PRODH2',
+    'SLC5A2',
+    'RXRA',
+    'SLC22A8',
+    'SLC13A3',
+    'SLC22A6',
+    'SLC34A1',
+    'SLC22A7',
+    'TPM1',
+    'VCAM1',
+    'CUBN',
+    'SLC13A1',
+    'SLC22A7',
+    'SLC7A13',
+    'SLC5A8',
+    'SATB2',
+    "MOGAT1",
+    'SLC13A1',
+    'SLC5A12',
+    'SLC3A1',
+    'SLC5A2',
+    "ABCC3",
+    'PDZK1'
+  )
+)
+
+
+data <- rio::import("data/MAP_aPTxPT_tripod_result.RDS")
+df_1 <- data$DE_aPTxPTS12
+pos <- 'aPT'
+neg <- 'PT-S12'
+color.df <-
+  rio::import_list("data/Epigenomic_paper_colors.xlsx")
+color.df <- color.df$Sheet1
+grey <- "#48494B"
+color1 <- color.df[color.df$celltype == pos, 2]
+color2 <- color.df[color.df$celltype == neg, 2]
+colnames(df_1) <-
+  c("annot.symbol","p_val",
+    "log2FC",
+    "pct.1",
+    "pct.2",
+    "pvalue.t.test","UP_DE")
+keyvals <- ifelse((df_1$log2FC < 0 &
+                     df_1$pvalue.t.test < 0.05 & (df_1$pct.1>0.02 |df_1$pct.2>0.02 )),
+                  color2,
+                  ifelse((df_1$log2FC > 0 & df_1$pvalue.t.test < 0.05 & (df_1$pct.1>0.02 |df_1$pct.2>0.02 )), color1,
+                         grey))
+alphavp <- ifelse(
+  ( 
+    df_1$log2FC < 0 &
+      df_1$pvalue.t.test < 0.05 & df_1$annot.symbol %in% goal_gene & (df_1$pct.1>0.02 |df_1$pct.2>0.02 )
+  ),
+  1,
+  ifelse((
+    df_1$log2FC > 0 &
+      df_1$pvalue.t.test < 0.05 & df_1$annot.symbol %in% goal_gene & (df_1$pct.1>0.02 |df_1$pct.2>0.02 )
+  ),
+  1,
+  1 / 10
+  )
+)
+
+
+lab1 <- ifelse(
+  ( 
+    df_1$log2FC < 0 &
+      df_1$pvalue.t.test < 0.05 & (df_1$annot.symbol %in% goal_gene) & (df_1$pct.1>0.02 |df_1$pct.2>0.02 )
+  ),
+  df_1$annot.symbol,
+  ifelse((
+    df_1$log2FC > 0 &
+      df_1$pvalue.t.test < 0.05 & df_1$annot.symbol %in% goal_gene & (df_1$pct.1>0.02 |df_1$pct.2>0.02 )
+  ),
+  df_1$annot.symbol,
+  ""
+  )
+)
+
+keyvals[is.na(keyvals)] <- grey
+names(keyvals)[keyvals == color1] <- pos
+names(keyvals)[keyvals == grey] <- 'p-value NS'
+names(keyvals)[keyvals == color2] <- neg
+df_1$keyvals <- keyvals
+df_1$alphavp <- alphavp
+df_1$lab1 <- lab1
+
+
+p3 <- EnhancedVolcano:: EnhancedVolcano(
+  df_1,
+  lab = df_1$lab1,
+  labSize = 3.5,
+  labCol = 'black',
+  colAlpha = alphavp,
+  labFace = 'bold',
+  selectLab = goal_gene,
+  colCustom = keyvals,
+  boxedLabels = F,
+  drawConnectors = T,
+  colConnectors = 'grey50',
+  arrowheads = FALSE,
+  widthConnectors = .5,
+  min.segment.length = .001,
+  maxoverlapsConnectors = 100,
+  ylim = 0.00000000001,
+  pointSize = .8,
+  legendLabSize = 10,
+  legendIconSize = 3,
+  x = 'log2FC',
+  y = 'pvalue.t.test',
+  pCutoff = .05,
+  FCcutoff = 0,
+  title = paste0(neg, ' ', pos),
+  xlab = bquote( ~ Log[2] ~ 'FC'),
+  ylab =   bquote( ~ -Log[10] ~ 'p-value'),
+  gridlines.major = FALSE,
+  gridlines.minor = FALSE,
+  lengthConnectors = unit(0.05, "npc"),
+)
+
+plot(p3)
+```
+
+
+Fig4E 
+```{r}
+date <-  format(Sys.time(), "%a_%b_%d")
+# #data <- rio::import("../scMega/Dec_30/TRIPOD.MAR.13.2023_aPTxPT.RDS")
+# data <- rio::import("../../R_paper/scMega/Dec_30/TRIPOD.MAR.13.2023_aPTxPT_v2.RDS")
+```
+
+
+```{r}
+df <- rio::import(paste0(output,"aPTxPT_annotatr.xlsx"))
+
+df <- df[df$DNAme.Hypo.Dip_Annot!="FALSE",]
+df <- df[!is.na(df$ACT_ENH_REP),]
+df$volcano.fig4E_peak_Annot_by_Author <- paste0(df$Gene_Annot_by_Author,"_",str_split(df$name.pk_Annot ,'[.]',simplify = T)[,3])
+goal_gene <- c("ITGB3","PROM1","TPM1","PDZK1","SLC5A12","RXRA","PRODH2")
+df$keyvals <- ifelse(df$ACT_ENH_REP=="ACT", "darkgreen",ifelse(df$ACT_ENH_REP=="ENH","blue",ifelse(df$ACT_ENH_REP=="REP", "red","grey")))
+df$vals <- ifelse(df$ACT_ENH_REP=="ACT", 2,ifelse(df$ACT_ENH_REP=="ENH",1,ifelse(df$ACT_ENH_REP=="REP", 3,0)))
+df <- df[order(df$vals),]
+df$alphavp <- ifelse(((df$Gene_Annot_by_Author %in% goal_gene & df$keyvals!="grey" & df$pv.adj_DA<0.05) ), 1,1/10) 
+df$lab1 <- ifelse(df$Gene_Annot_by_Author %in% goal_gene & df$vals!=0 & df$pv.adj_DA<0.05,df$volcano.fig4E,"")
+df_1 <- df
+alphavpv <- df_1$alphavp
+keyvals <- df_1$keyvals
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == "red"] <- "Repressed Pro"
+names(keyvals)[keyvals == "darkgreen"] <- "Active Pro"
+names(keyvals)[keyvals == "blue"] <- "Predicted Enh"
+
+p5 <-  EnhancedVolcano:: EnhancedVolcano(df_1,
+                       lab = df_1$lab1,
+                       labSize = 3.5, #3.5
+                       labCol = 'black',
+                       colAlpha = alphavpv,
+                       labFace = 'bold',
+                       #selectLab = genegoal,
+                       colCustom = keyvals,
+                       boxedLabels = F,
+                       drawConnectors = T,
+                       colConnectors = 'grey50',
+                       arrowheads = FALSE,
+                       widthConnectors = .4,
+                       min.segment.length=.001,
+                       maxoverlapsConnectors = 800000000,
+                       directionConnectors = 'both',
+                       #ylim = c(0,200),
+                       xlim=c(-6,6),
+                       pointSize = 1,
+                       legendLabSize = 10,
+                       legendIconSize = 1,
+                       x = 'avg.log2FC_DA',
+                       y = 'pv.adj_DA',
+                       pCutoff = .05,
+                       #pCutoff = .05,
+                       FCcutoff = 0,
+                       title="",
+                       xlab = bquote(~Log[2]~ 'FC'),
+                       ylab =   bquote(~-Log[10]~'p-value'),
+                       gridlines.major = FALSE,
+                       gridlines.minor = FALSE,
+                       lengthConnectors = unit(0.05, "npc")
+)
+
+plot(p5)
+
+```
+
+
+
+Fig4CDips DNAm
+```{r}
+df <- rio::import(paste0(output,"aPTxPT_annotatr.xlsx"))
+df <- df[df$DNAme.Hypo.Dip_Annot!="FALSE",]
+
+goal_gene <- c("ITGB3","PROM1","TPM1","PDZK1","SLC5A12","RXRA","PRODH2")
+
+df$volcano.fig4C_peak_Annot_by_Author <- paste0(df$Gene_Annot_by_Author,"_",str_split(df$name.pk_Annot,'[.]',simplify = T)[,3])
+
+color1 <- c("#467a3c")
+color2 <- c("#EB7D28")
+color3 <- "#BB001E"
+grey <- "grey80"  #48494B"
+pos <- "aPT"
+neg <- "PT-S12"
+
+df$keyvals <- ifelse(df$DNAme.Hypo.Dip_Annot=="TRUE" & df$curated_Annot_by_Author=="promoter" & df$pv.adj_DA<0.05 , color3,ifelse(df$DNAme.Hypo.Dip_Annot=="TRUE" & df$curated_Annot_by_Author!="promoter" & df$pv.adj_DA<0.05, "blue",grey))
+
+
+
+df$alphavp <- ifelse(df$DNAme.Hypo.Dip_Annot=="FALSE",1/10,ifelse((df$Gene_Annot_by_Author %in% goal_gene & df$DNAme.Hypo.Dip_Annot=="TRUE" & df$pv.adj_DA<0.05),1,1/10)) 
+
+
+genegoal <- ifelse(df$DNAme.Hypo.Dip_Annot=="TRUE" & (df$Gene_Annot_by_Author %in% goal_gene)& df$pv.adj_DA<0.05 ,df$volcano.fig4C_peak_Annot_by_Author,"") 
+df$lab1 <-genegoal
+
+dfa <- df[df$keyvals==grey,]
+dfb <- df[df$keyvals!=grey & df$alphavp==1/10,]
+dfb <- dfb[order(dfb$curated_Annot_by_Author,decreasing = F),] 
+dfc <- df[df$keyvals!=grey   & df$alphavp==1,]
+
+df_1 <-do.call("rbind", list(dfa, dfb, dfc))
+keyvals <- df_1$keyvals
+keyvals[is.na(keyvals)] <- grey
+names(keyvals)[keyvals == color3] <- "DNAm Dip Promoter"
+names(keyvals)[keyvals == "blue"] <- "DNAm Dip"
+names(keyvals)[keyvals == grey] <- "No DNAm Dip"
+alphavp <- df_1$alphavp
+
+p4 <-  EnhancedVolcano:: EnhancedVolcano(df_1,
+                       lab = df_1$lab1,
+                       labSize = 3.5, 
+                       labCol = 'black',
+                       colAlpha = alphavp,
+                       labFace = 'bold',
+                       colCustom = keyvals,
+                       boxedLabels = F,
+                       drawConnectors = T,
+                       colConnectors = 'grey50',
+                       arrowheads = FALSE,
+                       widthConnectors = .5,
+                       min.segment.length=.001,
+                       maxoverlapsConnectors = 500000,
+                       directionConnectors = 'both',
+                       #ylim = c(0,200),
+                       xlim=c(-6,6),
+                       pointSize = 1,
+                       legendLabSize = 10,
+                       legendIconSize = 1,
+                       x = 'avg.log2FC_DA',
+                       y = 'pv.adj_DA',
+                       pCutoff = .05,
+                       #pCutoff = .05,
+                       FCcutoff = 0,
+                       title="",
+                       xlab = bquote(~Log[2]~ 'FC'),
+                       ylab =   bquote(~-Log[10]~'p-value'),
+                       gridlines.major = FALSE,
+                       gridlines.minor = FALSE,
+                       lengthConnectors = unit(0.05, "npc")
+)
+
+
+plot(p4)
+
+```
+
+
+
+
+
+
+```{r}
+df_1 <- rio::import(paste0(output,"Sup_Table_6_TRIPOD_aPTxPT_annotatr.xlsx"))
+df_1$volcano.fig4G_Gene.link_TP <- paste0(df_1$Gene.link_TP,"_",str_split(df_1$name.pk_Annot,'[.]',simplify = T)[,3])
+
+df_1 <- df_1[df_1$Gene.link_TP_DE=="UP_PT",]
+
+df_1 <- df_1[,c(1,3,4,14:20,30,53)]
+
+
+df_1 <- unique(df_1)
+
+
+grey <- "#48494b"  
+
+cut1 <- 0.02
+cutoff <- 0.05
+looking <- 'down_aPTxup_PTS12'
+#output <- './'
+goal_gene <-  unique(c("ITGB3","PROM1","TPM1","PDZK1","SLC5A12","RXRA","PRODH2",'LRP2','SLC5A12',"HNF4A"))
+#grey all NO_NP  and DA bigger in PT and adjpv>0.05
+keyvals <- ifelse(
+  (df_1$pct.aPT_DA < cut1 &  df_1$`pct.PT-S12_DA`> cut1 & df_1$NewPeak_DA =="NP" & df_1$avg.log2FC_DA < 0 & df_1$pv.adj_DA<cutoff), color2,grey) 
+df_1$keyvals <- keyvals
+
+
+# alphavp <- ifelse(
+#   (df_1$pct.aPT_DA< cut1 & df_1$`pct.PT-S12_DA`> cut1  & df_1$avg.log2FC_DA< 0 & df_1$pv.adj_DA<cutoff & (df_1$Gene.link_TP %in% goal_gene)), 1,1/5) #df_1$pct.2 > cut2 & df_1$pct.1 < cut1 & 
+alphavp <- ifelse( df_1$keyvals == color2 & df_1$Gene.link_TP %in% goal_gene, 1,1/5)
+
+df_1$alphavp <- alphavp
+keyvals[is.na(keyvals)] <- grey
+names(keyvals)[keyvals == color1] <- pos
+names(keyvals)[keyvals == grey] <- ''
+names(keyvals)[keyvals == grey] <-"DA"
+names(keyvals)[keyvals == color2] <- paste0('DA and New Peaks')
+df_1$lab1 <- ifelse((df_1$keyvals == color2 & df_1$Gene.link_TP %in% goal_gene),df_1$volcano.fig4G_Gene.link_TP,'')
+
+
+
+
+
+
+
+
+#saveRDS(df_1,"../scMega/Dec_30/Fig4G_UPPT.RDS")
+#write.csv(df_1, file=paste0(output,looking,"_volcano_FEV17_2023.csv"),row.names=FALSE)
+# df_1$lab1 <- ifelse((df_1$pct.aPT_DA < cut1 &df_1$`pct.PT-S12_DA`>cut1  & df_1$Gene.link_TP %in% goal_gene & df_1$avg.log2FC_DA<0),df_1$volcano,'')
+
+#dfff <- readRDS("../scMega/Dec_30/Fig4G_UPPT.RDS")
+
+p2 <- EnhancedVolcano:: EnhancedVolcano(df_1,
+                       lab = df_1$lab1,
+                       labSize = 3.5, #3.5
+                       labCol = 'black',
+                       colAlpha = alphavp,
+                       labFace = 'bold',
+                       #selectLab = df_1$lab1,
+                       colCustom = keyvals,
+                       boxedLabels = F,
+                       drawConnectors = T,
+                       colConnectors = 'grey50',
+                       arrowheads = FALSE,
+                       widthConnectors = .2,
+                       min.segment.length=.001,
+                       maxoverlapsConnectors = 500000000,
+                       # ylim = c(0.,100),
+                      xlim=c(-4,4),
+                       pointSize = .8,
+                       legendLabSize = 10,
+                       legendIconSize = 1,
+                       x = 'avg.log2FC_DA',
+                       y = 'pv.adj_DA',
+                       pCutoff = .05,
+                       #pCutoff = .05,
+                       FCcutoff = 0,
+                       title=paste0(neg,' ',pos,'pct.aPT<',cut1),
+                       xlab = bquote(~Log[2]~ 'FC'),
+                       ylab =   bquote(~-Log[10]~'p-value'),
+                       gridlines.major = FALSE,
+                       gridlines.minor = FALSE,
+                       lengthConnectors = unit(0.05, "npc"),
+)
+
+
+plot(p2)
+
+```
+
+aPT
+```{r}
+
+df_1 <-  rio::import(paste0(output,"Sup_Table_6_TRIPOD_aPTxPT_annotatr.xlsx"))
+df_1$volcano.fig4G_Gene.link_TP <- paste0(df_1$Gene.link_TP,"_",str_split(df_1$name.pk_Annot,'[.]',simplify = T)[,3])
+
+df_1 <- df_1[df_1$Gene.link_TP_DE=="UP_aPT",]
+
+df_1 <- df_1[,c(1,3,4,14:20,30,53)]
+
+#df_1 <- df_1[,c(2,3,4,14:20,30,53)]
+
+
+df_1 <- unique(df_1)
+
+
+
+
+
+
+cut1 <- 0.02
+cutoff <- 0.05
+looking <- 'up_aPTxdown_PTS12'
+#output <- './'
+
+goal_gene <- c("ELF3","KLF6","ITGB3","KLF10","PROM1", 'TPM1', 'VCAM1')
+
+keyvals <- ifelse(
+  (  df_1$`pct.PT-S12_DA`< cut1 &df_1$pct.aPT_DA > cut1 & df_1$NewPeak_DA =="NP" & df_1$avg.log2FC_DA > 0 & df_1$pv.adj_DA<cutoff), color1,grey) 
+df_1$keyvals <- keyvals
+
+alphavp <- ifelse( df_1$keyvals == color1 & (df_1$Gene.link_TP %in% goal_gene), 1,1/5)
+
+
+
+
+df_1$alphavp <- alphavp
+keyvals[is.na(keyvals)] <- grey
+names(keyvals)[keyvals == color1] <- paste0('DA and New Peaks')
+names(keyvals)[keyvals == grey] <- ''
+names(keyvals)[keyvals == grey] <-"DA"
+names(keyvals)[keyvals == color2] <- neg
+df_1$lab1 <- ifelse((df_1$keyvals == color1 & df_1$Gene.link_TP %in% goal_gene),df_1$volcano.fig4G,'')
+#write.csv(df_1, file=paste0(output,looking,"_volcano_FEV16_2023.csv"),row.names=FALSE)
+
+#saveRDS(df_1,"../scMega/Dec_30/Fig4J_UPaPT.RDS")
+
+#dfapt <- readRDS("../scMega/Dec_30/Fig4J_UPaPT.RDS")
+
+p2 <- EnhancedVolcano:: EnhancedVolcano(df_1,
+                       lab = df_1$lab1,
+                       labSize = 3.5, #3.5
+                       labCol = 'black',
+                       colAlpha = alphavp,
+                       labFace = 'bold',
+                       #selectLab = df_1$lab1,
+                       colCustom = keyvals,
+                       boxedLabels = F,
+                       drawConnectors = T,
+                       colConnectors = 'grey50',
+                       arrowheads = FALSE,
+                       widthConnectors = .2,
+                       min.segment.length=.001,
+                       maxoverlapsConnectors = 500000000,
+                       # ylim = c(0.,100),
+                       xlim=c(-3,5),
+                       pointSize = .8,
+                       legendLabSize = 10,
+                       legendIconSize = 1,
+                       x = 'avg.log2FC_DA',
+                       y = 'pv.adj_DA',
+                       pCutoff = .05,
+                       #pCutoff = .05,
+                       FCcutoff = 0,
+                       title=paste0(neg,' ',pos,'pct.aPT<',cut1),
+                       xlab = bquote(~Log[2]~ 'FC'),
+                       ylab =   bquote(~-Log[10]~'p-value'),
+                       gridlines.major = FALSE,
+                       gridlines.minor = FALSE,
+                       lengthConnectors = unit(0.05, "npc"),
+)
+
+pdf(paste0(output,looking,'volcano_NP_TRIPOD1_',date,'.pdf'),width = 4.5,height = 6)
+plot(p2)
+dev.off()
+```
+

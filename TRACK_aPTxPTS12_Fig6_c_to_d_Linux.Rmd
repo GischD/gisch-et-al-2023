@@ -1,0 +1,193 @@
+---
+title: "PT"
+output: html_notebook
+---
+Using aPTxPTS12 seurat object from generate.PT.TAL.objects.r 
+The signac plot the tracks for Figure 6(c - d) runs just in linux machine. 
+The bigwig files can be download from kpmp or zenodo 
+```{r}
+library(Seurat)
+library(Signac)
+library(TRIPOD)
+library(Nebulosa)
+library(patchwork)
+library(grid)
+library(gridExtra)
+library(EnsDb.Hsapiens.v86)
+library(rtracklayer)
+```
+
+
+The seurat object is a subset for aPTxPTS12 following the script generate.PT.TAL.objects.r 
+The bigwig files can be download from kpmp or zenodo 
+
+```{r}
+#pbmc <- readRDS('data/aPTxPTS12_Seurat_obj.RDS')
+# DefaultAssay(pbmc) <- 'ATAC'
+# 
+# b.inputpath <- "../ATAC/blue/"
+# frags <- Fragments(pbmc)  # get list of fragment objects
+#   # remove fragment information from assay
+# new.paths <- list.files(b.inputpath,pattern='10X_Dual')
+# for (i in seq_along(frags)) {
+#   frags[[i]] <- UpdatePath(frags[[i]], new.path = paste0(b.inputpath,new.paths[[i]],'/atac_fragments.tsv.gz')) # update path
+# }
+# Fragments(pbmc) <- NULL
+# Fragments(pbmc) <- frags # assign updated list back to the object
+```
+
+
+
+
+```{r}
+
+
+# GE <- c("KLF6", "TPM1", "VCAM1", "PROM1", "ITGB3", "ELF3", "KLF10")
+# TF <- c("KLF6", "KLF10", "ELF3")
+
+cells <- c("PT-S12", "aPT")
+Idents(pbmc) <- "PTS12.l3"
+DefaultAssay(pbmc) <- "ATAC"
+Idents(pbmc) <- factor(pbmc$PTS12.l3, levels = c("PT-S12", "aPT"))
+levels(pbmc) <- cells
+color <-
+  rio::import_list("data/Epigenomic_paper_colors.xlsx")
+color <- color$Sheet1
+color <- color[color$celltype %in% c("aPT", "PT-S12"), ]
+color <- color[order(color$celltype, decreasing = T), ]
+
+combine.atac <- pbmc
+lf <- list()
+
+
+
+tripod_result <-
+  rio::import("data/MAP_aPTxPT_tripod_result.RDS")
+tripod_result <- tripod_result$TRIPOD_analyse_method_1
+#scMEGA
+# sc90 <-
+#   sc_result <-
+#   rio::import("data/Cor_90_80_scMEGA.JAN.20.2023_notreshold_aPTxPT.RDS")
+
+#scMEGA
+#sc80 <-  rio::import("data/Cor_80scMEGA.DEZ.30.2022_aPTxPT.xlsx")
+
+```
+
+
+```{r,fig.height=10,fig.keep=T}
+pr_m <- c(0) 
+TF <- c("ELF3") 
+dir.create(TF)
+pathoutput <-paste0(TF,"/")
+grf <- GRanges()
+GE <- c("ITGB3","KLF6","KLF10","TPM1")
+for (pr in pr_m ) {
+  for (TF.name in TF) {
+    for (gene.name in GE) {
+      gene <- gene.name
+      if (pr == 0) {
+        mt <- "TRIPOD_1"
+        dp <-
+          tripod_result[tripod_result$Gene.link_TP %in% gene.name &
+                          tripod_result$Gene.TF_TP == TF.name &
+                          tripod_result$pv.adj_DA < 0.05,]
+        peak.name <- unique(dp$pk.region_Annot)
+        peak.name_not <- unique(dp[,c("pk.region_Annot","name.pk_Annot")])
+        
+      }
+      
+      
+      if (length(peak.name != 0)) {
+        gr0 <- LookupGeneCoords(pbmc, gene = gene.name)
+        gr0$color <- ""
+        gr1 <- StringToGRanges(peak.name)
+        gr1$color <- "red"
+        gr1 <- gr1[order(gr1@ranges@start), ]
+        
+        
+        graux <- append(gr1,gr0)
+        
+        s <- min(graux@ranges@start)
+        e <- max(graux@ranges@start + graux@ranges@width)
+        sz=1000L            
+        gr0@ranges@start <- s - sz
+        gr0@ranges@width <- (e  + +sz+sz) - gr0@ranges@start     
+        
+        agr <- gr0
+        agr$gene <- gene.name
+        grf=append(grf,agr)
+        
+        
+        cov_plot <- CoveragePlot(
+          features = gene.name,
+          idents = c("PT-S12", "aPT"),
+          object = combine.atac,
+          assay = 'ATAC',
+          group.by = 'PTS12.l3',
+          region = gr0,
+          annotation = F,
+          peaks = F,
+          links  = F,
+          region.highlight = gr1
+        ) & scale_fill_manual(values = color$color) &
+          labs(subtitle = paste0("Gene: ", gene.name, " TF: ", TF.name, " ", mt)) &
+          theme(text = element_text(size = 15))
+####################        
+        DNAm <- BigwigTrack(
+        bigwig.scale = 'separate',
+        type = "coverage",
+          region =  gr0,
+          #bigwig from zenodo
+          bigwig = list(TI = "data/mlTI.bw"),
+          y_label = "WGBS"
+        ) &
+           scale_fill_manual(name = "DNAm", values = c("#BB001E")) &
+           theme(text = element_text(size = 15))
+###################
+        cutrun <- BigwigTrack(
+          bigwig.scale = 'separate',
+          region =  gr0,
+          #bigwig from zenodo
+          bigwig = list(
+            H3K27ac = "data/H3K27Ac.20.Rep1_Rep2_Rep3.KTRC.A_B_D.merge.norm.bw",
+            H3K27me3 = "data/H3K27me3.20.Rep1_Rep2_Rep3.687_688_LN2_OCT.KTRC.A_B_D.merge.norm.bw",
+            H3K4me1 = "data/H3K4me1.20.Rep1_2_3.merge.norm.bw",
+            H3K4me3 = "data/H3K4me3.20.Rep1_2_3.merge.norm.bw"
+          ),
+          y_label = "CUT&RUN"
+        ) &
+          scale_fill_manual(
+            name = "CUT&RUN",
+            values = c("#006950", "#801737", "#00A6DD", "#00B12A")
+          ) &
+         labs(caption = paste0(paste(peak.name_not[,1], collapse = ", "),"\n",paste(peak.name_not[,2], collapse = ", ")) ) &
+          theme(
+            text = element_text(size = 15),
+            plot.caption.position = "plot",
+            plot.caption = element_text(hjust = 0, size = 8)
+          )
+      
+############        
+        gene_plot <- AnnotationPlot(object = combine.atac,
+                                    region = gr0)
+        gene_plot
+        peak_plot <- PeakPlot(object = combine.atac,
+                              region = gr0)
+        link_plot <- LinkPlot(object = combine.atac,
+                              region = gr0)
+        
+        pcc <-
+          CombineTracks(
+            plotlist = list(cov_plot, gene_plot, peak_plot, link_plot, DNAm, cutrun),
+            heights = c(10, 5, 5, 5, 5, 20),
+            widths = c(7, 3)
+          )
+        
+        
+        plot(pcc)
+      }
+    }
+  }
+}
+```

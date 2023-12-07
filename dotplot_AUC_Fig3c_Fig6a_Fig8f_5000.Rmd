@@ -1,0 +1,301 @@
+---
+title: "Fig3c Fig6a and Fig8f "
+output: html_notebook
+---
+
+
+This version of the code is representative to Figures Fig3c Fig5a and Fig7g.
+
+To calculate the bargraphs we modify Signac 1.6.0 version to get snATAC-seq signal by gene.
+For the comunity reproducibility now the signal from snATAC-seq comes from the bigwig provided in zenodo.
+
+```{r}
+library(Seurat)
+library(Signac)
+library(SeuratDisk)
+library(SeuratData)
+library(ggplot2)
+library(rtracklayer)
+library(stringr)
+```
+
+
+Download the data from
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8029990.svg)](https://doi.org/10.5281/zenodo.8029990)
+
+
+```{r}
+dir.create("Fig3c_Fig6a_Fig8f_5000")
+output <- "Fig3c_Fig6a_Fig8f_5000/"
+pbmc <- LoadH5Seurat("raw_snATAC_and_snRNA_human_kidney.h5Seurat") 
+```
+
+
+
+
+```{r}
+pbmc@meta.data[["PTS12_aTAL12"]]<-ifelse((pbmc@meta.data[["subclass.l2"]]=='PT-S1'|pbmc@meta.data[["subclass.l2"]]=='PT-S2'),'PT-S12', ifelse((pbmc@meta.data[["subclass.l2"]]=='aTAL1'|pbmc@meta.data[["subclass.l2"]]=='aTAL2'),
+                                                                                                                'aTAL12', as.character(pbmc@meta.data[["subclass.l2"]])))
+
+
+
+color <- rio::import("../tables/Epigenomic_paper_colors.xlsx")
+
+color.PT12 <- color
+color.PT12$celltype <- ifelse(color.PT12$celltype=="PT-S1"|color.PT12$celltype=="PT-S2","PT-S12",
+                     ifelse(color.PT12$celltype=="aTAL1"|color.PT12$celltype=="aTAL2","aTAL12",color.PT12$celltype))
+
+color.PT12$myColor <- ifelse(color.PT12$celltype=='aTAL12',"#13A3E2",ifelse(color.PT12$celltype=='PT-S12',"#EB7D28",color.PT12$myColor))
+color.PT12 <- unique(color.PT12)
+
+color.PT12 <- color.PT12[c(1:15,19,16:18,20:82),]
+color.PT12 <- color.PT12[color.PT12$celltype %in% unique(factor(pbmc@meta.data$PTS12_aTAL12)),]
+
+
+Idents(pbmc) <- factor(pbmc@meta.data$PTS12_aTAL12,levels = color.PT12$celltype)
+
+```
+
+
+
+DotPlot
+
+Fig3c
+```{r}
+genesf3c <- c('PODXL','NPHS1','NPHS2','PTPRQ','WT1', 'NTNG1',
+              'LRP2','CUBN', 'SLC5A12', 'SLC13A3', 'SLC22A6','PDZK1','SLC5A2',
+               'UMOD','CASR',
+              'ESRRB',  'CLDN16','TMEM52B','ACTB')
+DefaultAssay(pbmc) <- 'RNA'
+dp_fig3c <- DotPlot(pbmc, features = genesf3c, idents=c("POD",'PT-S12','C-TAL')) + 
+  RotatedAxis() + 
+  scale_y_discrete(limits=rev) +theme(text = element_text(size = 20) ,axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+#Dotplot fig5a
+plot(dp_fig3c)
+```
+
+Fig5a 
+```{r}
+genesPT <- c("KLF6","TEAD1","MEF2A","STAT3","NFKB1","ZEB1","SREBF2","SOX4","CREM","ELF3","STAT1","KLF10","REL","RELB","FOS","TCF3","KLF5","NFKB2","TEAD4")
+DefaultAssay(pbmc) <- 'RNA'
+dp_fig5a <- DotPlot(pbmc, features = genesPT, idents=c('PT-S12','aPT')) + 
+  RotatedAxis() + 
+  scale_y_discrete(limits=rev) +theme(text = element_text(size = 20) ,axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+      
+#Dotplot fig5a
+plot(dp_fig5a)
+
+```
+
+
+
+```{r}
+genesTAL <- c(
+"ESRRB"   ,"PBX1" ,  
+"RORA"    ,"TFAP2B", 
+"THRB"    ,"MITF" ,  
+"HOXD3"   ,"NFYC" ,  
+"PBX3"    ,"KLF9" ,  
+"ZEB1"    ,"SMAD3",  
+"TEAD1"   ,"GLIS3",  
+"ELK3"    ,"ETS1" ,  
+"ETV6"    ,"KLF6" ,  
+"BHLHE40" ,"KLF5" ,  
+"NR2F1")
+DefaultAssay(pbmc) <- 'RNA'
+
+dp_fig7g <- DotPlot(pbmc, features = genesTAL, idents=c('C-TAL','aTAL12')) + 
+  RotatedAxis() + 
+  scale_y_discrete(limits=rev) +theme(text = element_text(size = 20) ,axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+        # ,axis.title.x=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.ticks.x=element_blank())
+
+
+
+#Dotplot fig5a
+plot(dp_fig7g)
+
+```
+
+Subset the bigwigs by gene 
+```{r}
+# df.cr <- list()
+# 
+# 
+# df.cr[['POD_snATAC']][['data']] <-
+#   data.frame(import.bw('../../MAR_10/bigwig/multiome/POD.bw'))
+# df.cr[['POD_snATAC']][['data']] <-
+#   makeGRangesFromDataFrame(df.cr[['POD_snATAC']][['data']], keep.extra.columns = T)
+# 
+# df.cr[['PTS12_snATAC']][['data']] <-
+#   data.frame(import.bw('../../MAR_10/bigwig/multiome/PT-S12.bw'))
+# df.cr[['PTS12_snATAC']][['data']] <-
+#   makeGRangesFromDataFrame(df.cr[['PTS12_snATAC']][['data']], keep.extra.columns = T)
+# 
+# df.cr[['CTAL_snATAC']][['data']] <-
+#   data.frame(import.bw('../../MAR_10/bigwig/multiome/C-TAL.bw'))
+# df.cr[['CTAL_snATAC']][['data']] <-
+#   makeGRangesFromDataFrame(df.cr[['CTAL_snATAC']][['data']], keep.extra.columns = T)
+# 
+# df.cr[['aPT_snATAC']][['data']] <-
+#   data.frame(import.bw('../../MAR_10/bigwig/multiome/aPT.bw'))
+# df.cr[['aPT_snATAC']][['data']] <-
+#   makeGRangesFromDataFrame(df.cr[['aPT_snATAC']][['data']], keep.extra.columns = T)
+# 
+# df.cr[['aTAL_snATAC']][['data']] <-
+#   data.frame(import.bw('../../MAR_10/bigwig/multiome/aTAL12.bw'))
+# df.cr[['aTAL_snATAC']][['data']] <-
+#   makeGRangesFromDataFrame(df.cr[['aTAL_snATAC']][['data']], keep.extra.columns = T)
+# 
+# goal <- unique(c('PODXL','NPHS1','NPHS2','PTPRQ','WT1', 'NTNG1',
+#               'LRP2','CUBN', 'SLC5A12', 'SLC13A3', 'SLC22A6','PDZK1','SLC5A2',
+#                'UMOD','CASR',
+#               'ESRRB',  'CLDN16','TMEM52B','ACTB',"KLF6","TEAD1","MEF2A","STAT3","NFKB1","ZEB1","SREBF2","SOX4","CREM","ELF3","STAT1","KLF10","REL","RELB","FOS","TCF3","KLF5","NFKB2","TEAD4","ESRRB", "RORA",  "THRB",  "FOXO3", "NFYC",  "NR6A1", "OVOL2", "MEF2C", "FOXN3", "HLF",   "ZEB1",  "TEAD1", "GLIS3", "ELK3",  "ETS1",  "KLF6",  "ETV6",  "KLF5",  "HIF1A", "BCL6",  "NR2F1", "ESRRB", "RORA",  "THRB",  "FOXO3",
+# "NFYC",  "NR6A1", "OVOL2", "MEF2C", "FOXN3", "HLF",   "ZEB1",  "TEAD1", "GLIS3", "ELK3",  "ETS1","KLF6","ETV6","KLF5","HIF1A","BCL6","NR2F1","ESRRB"   ,"PBX1" ,
+# "RORA"    ,"TFAP2B", 
+# "THRB"    ,"MITF" ,  
+# "HOXD3"   ,"NFYC" ,  
+# "PBX3"    ,"KLF9" ,  
+# "ZEB1"    ,"SMAD3",  
+# "TEAD1"   ,"GLIS3",  
+# "ELK3"    ,"ETS1" ,  
+# "ETV6"    ,"KLF6" ,  
+# "BHLHE40" ,"KLF5" ,  
+# "NR2F1"))
+# 
+# 
+# 
+# dataplot <- list()
+# 
+# DefaultAssay(pbmc) <- 'ATAC'
+# 
+# #Created a subset to plot the Fig 2a Fig3dtof
+# for (g in goal) {
+#   gr <- LookupGeneCoords(pbmc, gene = g)
+#   gr@ranges@start <- gr@ranges@start  - 5000L
+#   gr@ranges@width <- gr@ranges@width  + 1000L
+#   dataplot[[g]][["gr"]] <- gr
+#   for (na in names(df.cr)) {
+#     dataplot[[g]][[na]][['data']] <-
+#       subsetByOverlaps(df.cr[[na]][['data']], gr)
+#   }
+# }
+# date <-  format(Sys.time(), "%a_%b_%d")
+# 
+# saveRDS(dataplot, paste0(output,date,"_5000_subset_from_bigwig_Fig3c_Fig5a_Fig7g.RDS"))
+
+```
+
+Calculate the AUC
+```{r}
+library(zoo)
+AUC <- function(x, y){
+  s<- sum(diff(x)*rollmean(y,2))
+  return(s)
+}
+```
+
+
+```{r}
+dataplot <- readRDS(paste0(output,"Tue_Jun_20_5000_subset_from_bigwig_Fig3c_Fig5a_Fig7g.RDS"))
+
+
+for (g in names(dataplot)){
+  gr <- dataplot[[g]][["gr"]]
+  width.t <- gr@ranges@width 
+  for (na in names(dataplot[[g]])){
+  jump <- ifelse(na=="gr",next,"")
+  values <- data.frame(dataplot[[g]][[na]][["data"]])
+  s <- AUC(values$start, values$score)
+ dataplot[[g]][[na]][["celltype"]] <- str_split(na,'[_]',simplify = T)[,1]
+ dataplot[[g]][[na]][["area"]]=  s / width.t
+  }
+}
+df.area <- data.frame()
+for (g in names(dataplot)){
+  for (na in names(dataplot[[g]])){
+  jump <- ifelse(na=="gr",next,"")
+  df.aux <- data.frame(gene=g,area=dataplot[[g]][[na]][["area"]],celltype=dataplot[[g]][[na]][["celltype"]])
+  df.area <-rbind(df.area,df.aux) 
+  }
+}
+
+rio::export(df.area,paste0(output,date,"_5000_gene_area_celltype.xlsx"))
+
+```
+
+Figure 3C
+```{r}
+goal <-c('PODXL','NPHS1','NPHS2','PTPRQ','WT1', 'NTNG1',
+              'LRP2','CUBN', 'SLC5A12', 'SLC13A3', 'SLC22A6','PDZK1','SLC5A2',
+               'UMOD','CASR',
+              'ESRRB',  'CLDN16','TMEM52B','ACTB')
+# mall_pl_data <- readRDS('../../R_paper/HACK/area_michelle_genes.RDS')
+
+all_pl_data <- df.area[(df.area$celltype%in% c("POD","PTS12","CTAL") & df.area$gene%in% goal), ]
+
+
+all_pl_data$gene<- factor(all_pl_data$gene,levels = goal)
+all_pl_data$area <- as.numeric(all_pl_data$area)
+all_pl_data$celltype <- factor(all_pl_data$celltype,levels = c('POD', 'PTS12',"CTAL"))
+
+
+
+p1 <- ggplot(all_pl_data,aes(x=gene,y=area,fill=celltype))+geom_bar(stat = 'identity', position='dodge')+scale_fill_manual(values = color.PT12[color.PT12[, 1] %in% c("POD",'PT-S12','C-TAL'), 2])+ theme_bw() +theme(text = element_text(size = 20) ,axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+
+plot(p1)
+```
+
+
+
+
+Figure 5
+```{r}
+
+
+goal <- c("KLF6","TEAD1","MEF2A","STAT3","NFKB1","ZEB1","SREBF2","SOX4","CREM","ELF3","STAT1","KLF10","REL","RELB","FOS","TCF3","KLF5","NFKB2","TEAD4")
+
+all_pl_data <- df.area[(df.area$celltype%in% c("aPT","PTS12") & df.area$gene%in% goal), ]
+
+all_pl_data$gene<- factor(all_pl_data$gene,levels = goal)
+all_pl_data$area <- as.numeric(all_pl_data$area)
+all_pl_data$celltype <- factor(all_pl_data$celltype,levels = c('PTS12', 'aPT'))
+
+
+
+p1 <- ggplot(all_pl_data,aes(x=gene,y=area,fill=celltype))+geom_bar(stat = 'identity', position='dodge')+scale_fill_manual(values = color.PT12[color.PT12[, 1] %in% c('PT-S12','aPT'), 2])+ theme_bw() +theme(text = element_text(size = 20) ,axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+
+plot(p1)
+```
+
+
+Figure 7
+```{r}
+goal <-c(
+"ESRRB"   ,"PBX1" ,  
+"RORA"    ,"TFAP2B", 
+"THRB"    ,"MITF" ,  
+"HOXD3"   ,"NFYC" ,  
+"PBX3"    ,"KLF9" ,  
+"ZEB1"    ,"SMAD3",  
+"TEAD1"   ,"GLIS3",  
+"ELK3"    ,"ETS1" ,  
+"ETV6"    ,"KLF6" ,  
+"BHLHE40" ,"KLF5" ,  
+"NR2F1")
+
+all_pl_data <- df.area[(df.area$celltype%in% c("aTAL","CTAL") & df.area$gene%in% goal), ]
+
+all_pl_data$gene<- factor(all_pl_data$gene,levels = goal)
+all_pl_data$area <- as.numeric(all_pl_data$area)
+all_pl_data$celltype <- factor(all_pl_data$celltype,levels = c("CTAL","aTAL"))
+
+
+
+p1 <- ggplot(all_pl_data,aes(x=gene,y=area,fill=celltype))+geom_bar(stat = 'identity', position='dodge')+scale_fill_manual(values = color.PT12[color.PT12[, 1] %in% c('C-TAL',"aTAL12"), 2])+ theme_bw() +theme(text = element_text(size = 20) ,axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+
+plot(p1)
+```

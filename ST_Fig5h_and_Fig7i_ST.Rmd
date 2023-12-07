@@ -1,0 +1,160 @@
+---
+title: "Fig6f_and_Fig8h"
+output: html_notebook
+---
+
+Check the GEO for ST in the paper.
+
+```{r}
+dir.create("Fig6f_and_Fig8h")
+output <- "Fig6f_and_Fig8h/"
+
+library(Seurat)
+library(patchwork)
+library(gridExtra)
+library(ggplot2)
+library(RColorBrewer)
+library(ggraph)
+
+```
+
+Merge and Normalize the three spatial transcriptomic ST samples.
+```{r}
+sa <- c("REF_18-0006","AKI_20-0040","DKD_21-0063")
+obj.spatial <- list()
+obj.spatial[[sa[[1]]]] <- readRDS("data/share_V19S25-016_XY01_18-0006/V19S25-016_XY01_18-0006.RDS")
+obj.spatial[[sa[[2]]]] <- readRDS("data/share_V10S14-085_XY02_20-0040/V10S14-085_XY02_20-0040.RDS")
+obj.spatial[[sa[[3]]]] <- readRDS("data/share_V10S14-086_XY03_21-0063/V10S14-086_XY03_21-0063.RDS")
+DefaultAssay(obj.spatial[[sa[1]]]) <- "SCT"
+DefaultAssay(obj.spatial[[sa[2]]]) <- "SCT"
+DefaultAssay(obj.spatial[[sa[3]]]) <- "SCT"
+pap.merge <- merge(obj.spatial[[1]],list(obj.spatial[[2]],obj.spatial[[3]]))#,M47
+
+DefaultAssay(pap.merge) <- "Spatial"
+VariableFeatures(pap.merge) <- c(VariableFeatures(obj.spatial[[1]]),
+                                 VariableFeatures(obj.spatial[[2]]),
+                                 VariableFeatures(obj.spatial[[3]]))
+
+pap.merge <- SCTransform(pap.merge,assay = 'Spatial')
+pap.merge <- RunPCA(pap.merge, verbose = FALSE)
+pap.merge <- FindNeighbors(pap.merge, dims = 1:30)
+pap.merge <- FindClusters(pap.merge, verbose = FALSE)
+pap.merge <- RunUMAP(pap.merge, dims = 1:30)
+nameimage <- paste(sa,collapse = "_")
+#saveRDS(pap.merge,paste0("data/merged_samples_",nameimage,".RDS"))
+
+```
+
+Expression ST 
+```{r,fig.keep='all'}
+sa <- c("REF_18-0006","AKI_20-0040","DKD_21-0063")
+nameimage <- paste(sa,collapse = "_")
+obj.spatial <- readRDS(paste0("data/merged_samples_REF_18-0006_AKI_20-0040_DKD_21-0063.RDS"))
+
+g <- c("SLC12A1","TPM1","ELF3","NR2F1")
+
+sp_list <- list()
+
+
+
+pdf(paste0(output,"ST_gene_expression.pdf"))
+for (i in 1:length(g)) {
+        for (s in 1:length(sa)) {
+      sp_list[[paste0(sa[[s]],"_GeneExp_",g[i])]] <-
+      SpatialFeaturePlot(
+        obj.spatial,
+        features = g[i] ,
+        min.cutoff = "q5",
+        max.cutoff = "q95",
+        crop = F,
+        pt.size.factor = 1.25,
+        images = names(obj.spatial@images[s])
+      ) +
+      scale_fill_viridis(option = "D") + #,limits = c(liminf[i], lim[i]), oob = scales::squish
+      ggtitle(paste0(sa[[s]], " GE ", g[i])) +
+      labs(fill = "") +
+      theme(legend.position = "bottom",legend.direction = "vertical")
+        
+        
+}
+plot(sp_list[[paste0(sa[[1]],"_GeneExp_",g[i])]] + sp_list[[paste0(sa[[2]],"_GeneExp_",g[i])]] + sp_list[[paste0(sa[[3]],"_GeneExp_",g[i])]])
+}
+dev.off()
+```
+```{r}
+
+GRNSpatialPlot2 <- function(object, assay,
+                           df.grn,
+                           tf.use,
+                           min.cutoff = "q5",
+                           max.cutoff = "q95",
+                          vis.option = "B",
+                          crop = TRUE,
+                          pt.size.factor = 1,
+                          images.info = NULL){
+    DefaultAssay(object) <- assay
+
+    # select all targets for a TF
+    df.target <- subset(df.grn, tf == tf.use)
+
+    geneset <- list(tf.use = df.target$gene)
+    object <- AddModuleScore(object, features = geneset)
+
+    p <- Seurat::SpatialFeaturePlot(object, features = "Cluster1",
+                         min.cutoff = min.cutoff,
+                         max.cutoff = max.cutoff,
+                         crop = crop,
+                         pt.size.factor = pt.size.factor,
+                         images=images.info
+                         )+
+            scale_fill_viridis(option = vis.option) +
+            ggtitle(glue::glue("{tf.use} targets")) +
+    labs(fill='')
+
+    return(p)
+
+}
+```
+
+
+```{r}
+data <- rio::import_list("data/TF_activity_matrix.xlsx")
+#PT
+#TFGenecor <- rio::import_list("../../R_paper/scMega/New_version/Motif_cor_TFDE_DADE_andNetwork.xlsx")
+#TFGenecor <- rio::import_list("../../R_paper/scMega_TAL/Dec_12/TFGenecor.xlsx")
+
+
+
+
+#PT
+cell <- "PTS12"
+df.grn2 <- data$aPTxPTS12_TFcorGene
+tf <-  c("ELF3")
+
+#TAL
+# cell <- "TAL"
+# df.grn2 <- data$aTALxCTAL_TFcorGene
+# tf <- c("NR2F1")
+
+
+
+pdf(paste0(output,nameimage,"_TF_cor90_",cell,".pdf"))
+for (i in 1:length(tf)){
+        for (s in 1:length(sa)) {
+      sp_list[[paste0(sa[[s]],"_TF_Activity_",tf[i])]] <-
+        GRNSpatialPlot2(object = obj.spatial, assay = "SCT",
+                        df.grn = df.grn2, tf.use = tf[[i]], 
+                        vis.option = "B",crop = F,
+                        images.info = names(obj.spatial@images[s])) +
+           scale_fill_viridis(option = "B") +
+    ggtitle("")+
+    labs(fill = "",caption = paste0(sa[[s]], " TF activity of ",tf[i])) +
+    theme(legend.position = "bottom" ,legend.direction = "vertical")
+        }
+  
+plot(sp_list[[paste0(sa[[1]],"_TF_Activity_",tf[i])]] + sp_list[[paste0(sa[[2]],"_TF_Activity_",tf[i])]] + sp_list[[paste0(sa[[3]],"_TF_Activity_",tf[i])]])
+          
+
+}
+dev.off()
+```

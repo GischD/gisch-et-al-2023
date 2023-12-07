@@ -1,0 +1,242 @@
+---
+title: "Figure 8 a to c"
+output: html_notebook
+---
+
+```{r}
+library(Nebulosa)
+library(Seurat)
+library(Signac)
+library(scMEGA)
+library(stringr)
+library(EnhancedVolcano)
+```
+Fig 8a DE volcano plot aTALxCTAL
+```{r,fig.width=4,fig.height=8}
+library(data.table)
+library(EnhancedVolcano)
+library(stringr)
+library(patchwork)
+
+date <-  format(Sys.time(), "%a_%b_%d")
+
+data <- rio::import(paste0('data/MAP_aTALxCTAL_tripod_result.RDS')) 
+
+
+
+atalxctal <- data$DE_aTALxCTAL
+colnames(atalxctal) <-  c("annot.symbol","p_val","avg_log2FC", "pct.1", "pct.2","p_val_adj")
+atalxctal <- atalxctal[order(-abs(atalxctal$avg_log2FC)),]
+
+
+color.df <- rio::import_list("data/Epigenomic_paper_colors.xlsx")
+color.df <- color.df$Sheet1
+
+goal_gene <- c("ENOX1","EGF","ZEB1",
+  "CD44","CREB5","LAMC2",
+  "ESRRG","TM4SF1","FHL2",
+  "NR2F1","UMOD","WNK1",
+"ESSRB","SMAD3" ,"ELF3","SLC12A1")
+
+
+goal_gene <- unique(goal_gene)
+
+df_1 <- atalxctal
+pos <- 'aTAL12'
+neg <- 'C-TAL'
+color.df <-
+  rio::import_list("../../tables/Epigenomic_paper_colors.xlsx")
+color.df <- color.df$Sheet1
+grey <- "#48494B"
+color1 <- color.df[color.df$celltype == pos, 2]
+color2 <- color.df[color.df$celltype == neg, 2]
+colnames(df_1) <-
+  c("annot.symbol",
+    "p_val",
+    "log2FC",
+    "pct.1",
+    "pct.2",
+    "pvalue.t.test")
+keyvals <- ifelse((df_1$log2FC < 0 &
+                     df_1$pvalue.t.test < 0.05),
+                  color2,
+                  ifelse((df_1$log2FC > 0 & df_1$pvalue.t.test < 0.05), color1,
+                         grey))
+alphavp <- ifelse(
+  (
+    df_1$log2FC < 0 &
+      df_1$pvalue.t.test < 0.05 & df_1$annot.symbol %in% goal_gene
+  ),
+  1,
+  ifelse((
+    df_1$log2FC > 0 &
+      df_1$pvalue.t.test < 0.05 & df_1$annot.symbol %in% goal_gene
+  ),
+  1,
+  1 / 10
+  )
+)
+keyvals[is.na(keyvals)] <- grey
+names(keyvals)[keyvals == color1] <- pos
+names(keyvals)[keyvals == grey] <- 'p-value NS'
+names(keyvals)[keyvals == color2] <- neg
+p3 <-  EnhancedVolcano(
+  df_1,
+  lab = df_1$annot.symbol,
+  labSize = 3.5,
+  #3.5
+  labCol = 'black',
+  colAlpha = alphavp,
+  labFace = 'bold',
+  selectLab = goal_gene,
+  colCustom = keyvals,
+  boxedLabels = F,
+  drawConnectors = T,
+  colConnectors = 'grey50',
+  arrowheads = FALSE,
+  widthConnectors = .2,
+  min.segment.length = .001,
+  maxoverlapsConnectors = 10000000,
+  ylim = 0.00000000001,
+  pointSize = .8,
+  legendLabSize = 10,
+  legendIconSize = 3,
+  x = 'log2FC',
+  y = 'pvalue.t.test',
+  pCutoff = .05,
+  #pCutoff = .05,
+  FCcutoff = 0,
+  title = paste0(neg, ' ', pos),
+  xlab = bquote( ~ Log[2] ~ 'FC'),
+  ylab =   bquote( ~ -Log[10] ~ 'p-value'),
+  gridlines.major = FALSE,
+  gridlines.minor = FALSE,
+  lengthConnectors = unit(0.05, "npc"),
+)
+
+p3
+```
+
+```{r,fig.height=10}
+# goal_gene <- unique(c(atalxctal[1:20,"annot.symbol"],"NELL1", "ESRRB", "EGF", "PPM1E", "GP2", "ENOX1", "TMEM207", "TMEM52B", "CLDN16", "WNK1"))
+goal_gene <- c("S","NELL1", "ESRRB", "EGF", "ENOX1", "WNK1")
+
+df_1 <-atalxctal 
+pos <- 'aTAL12'
+neg <- 'C-TAL'
+
+color1 <- color.df[color.df$celltype==pos,2]
+color2 <- color.df[color.df$celltype==neg,2]
+grey <- "#48494B"
+
+
+
+colnames(df_1)
+colnames(df_1) <- c("annot.symbol","p_val","log2FC","pct.1","pct.2","pvalue.t.test")
+
+
+
+keyvals <- ifelse(
+  (df_1$log2FC < 0 & df_1$pvalue.t.test<0.05), color2,
+  ifelse((df_1$log2FC > 0 & df_1$pvalue.t.test<0.05), color1,
+         grey))
+
+
+
+alphavp <- ifelse(
+  (df_1$log2FC < 0 & df_1$pvalue.t.test<0.05 & df_1$annot.symbol %in% goal_gene), 1,
+  ifelse((df_1$log2FC > 0 & df_1$pvalue.t.test<0.05 & df_1$annot.symbol %in% goal_gene), 1,
+         1/10))
+
+keyvals[is.na(keyvals)] <- grey
+names(keyvals)[keyvals == color1] <- pos
+names(keyvals)[keyvals == grey] <- 'p-value NS'
+names(keyvals)[keyvals == color2] <- neg
+
+
+p2 <-  EnhancedVolcano(df_1,
+                       lab = df_1$annot.symbol,
+                       labSize = 3.5, #3.5
+                       labCol = 'black',
+                       colAlpha = alphavp,
+                       labFace = 'bold',
+                       selectLab = goal_gene,
+                       colCustom = keyvals,
+                       boxedLabels = F,
+                       drawConnectors = T,
+                       colConnectors = 'grey50',
+                       arrowheads = FALSE,
+                       widthConnectors = .2,
+                       min.segment.length=.001,
+                       maxoverlapsConnectors = 100,
+                       ylim = 0.00000000001,
+                       pointSize = .8,
+                       legendLabSize = 10,
+                       legendIconSize = 3,
+                       x = 'log2FC',
+                       y = 'pvalue.t.test',
+                       pCutoff = .05,
+                       #pCutoff = .05,
+                       FCcutoff = 0,
+                       title=paste0(neg,' ',pos),
+                       xlab = bquote(~Log[2]~ 'FC'),
+                       ylab =   bquote(~-Log[10]~'p-value'),
+                       gridlines.major = FALSE,
+                       gridlines.minor = FALSE,
+                       lengthConnectors = unit(0.05, "npc"),
+)
+
+p2
+
+```
+
+
+
+(scMEGA data)
+```{r}
+obj <- readRDS("../../R_paper/scMega_TAL/Dec_12/before_chromovar.RDS")  
+Idents(obj) <- "aTAL12.l3"
+color.df <- rio::import_list("data/Epigenomic_paper_colors.xlsx")
+color.df <- color.df$Sheet1
+cols <- color.df[color.df$celltype %in% unique(obj@meta.data$aTAL12.l3),2]
+obj@meta.data$aTAL12.l3 <- factor(obj@meta.data$aTAL12.l3,levels = c("C-TAL","aTAL12"))
+
+```
+
+```{r}
+set.seed(1234)
+```
+Figure 8b
+```{r,fig.keep='last'}
+DefaultAssay(obj) <- 'RNA'
+p1a <- DimPlot(obj, group.by = "aTAL12.l3", label = TRUE,
+             reduction = "umap_harmony", shuffle = TRUE, cols =cols ) 
+
+p1b <- TrajectoryPlot(object = obj,trajectory ="Trajectory",
+                    reduction = "umap_harmony",
+                    continuousSet = "blueYellow",
+                    size = 1,
+                   addArrow = FALSE) +
+    xlab("DC_1") + ylab("DC_2") +
+    ggtitle("Trajectory")
+plot(p1a) | plot(p1b)
+```
+Figure 8c
+```{r,fig.height=15,fig.width=10}
+DefaultAssay(obj) <- 'RNA'
+p2 <- list()
+g <-c("UMOD","ESRRG","NR2F1","FHL2","TM4SF1","LAMC2")
+        
+for (i in g){  
+  
+p2[[i]] <- plot_density(obj,
+               features = i,
+               reduction = "umap_harmony",
+               size = 1,
+               pal = "magma")
+#plot(p2[[i]])
+}
+
+plot(wrap_plots(p2,ncol = 2))
+
+```

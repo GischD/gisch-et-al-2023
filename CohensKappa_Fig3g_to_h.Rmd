@@ -1,0 +1,70 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(reshape2)
+library(ggplot2)
+library(rio)
+library(patchwork)
+library(psych)
+library(Signac)
+```
+```{r}
+dir.create("Fig3g_to_h")
+output <- "Fig3g_to_h/"
+```
+
+
+```{r}
+d2 <- rio::import("Fig3g_to_h/Sun_May_28_cohens_value_by_gene.xlsx")
+ck <- rio::import("Fig3g_to_h/cohen_by_gene_ALL_TECNOLOGIES_Sun_May_28.RDS")
+```
+
+```{r}
+
+
+p <- list()
+color.df <- c("#B9007D","#9761F0","#EB7D28")
+for (vvv in 2:46){
+  vvv <- 23
+d7 <- data.frame()
+for (g in names(ck)){
+  tec <- names(ck[[g]][vvv])
+  cohen.kappa <- ck[[g]][[tec]][["kappa"]]
+  cell.type <- d2[d2$annot.symbol==g,"cell_type"]
+  size <- d2[d2$annot.symbol==g,"gene_size"]
+  num.peak <- d2[d2$annot.symbol==g,"Number_Regions"]
+
+    aux <- data.frame(g,cell.type,size,num.peak,cohen.kappa,tec)
+
+  d7 <- rbind(d7,aux)
+}
+
+d7 <- d7[order(d7$cohen.kappa,decreasing = T),]
+d7$g <- factor(d7$g,levels = d7$g)
+d7 <- na.omit(d7)
+
+p[[vvv]] <- ggplot(data = d7, aes(x = g, y = cohen.kappa, color = cell.type)) +
+  geom_point(aes(size = size),shape=21) +  
+  #scale_colour_brewer(palette = "Dark2") +
+  scale_color_manual(values = color.df)+
+  scale_size(range = c(1,10))+
+  ggtitle(paste0(unique(tec),' Total genes: ',nrow(d7),
+                 "\n ck[-1,0] = ",nrow(d7[d7$cohen.kappa<=0,]),
+                 "  Not \n ck(0,0.2] = ",nrow(d7[d7$cohen.kappa>0 & d7$cohen.kappa<=0.2,]),
+                 "  Slight \n ck(0.2,0.4] = ",nrow(d7[d7$cohen.kappa>0.2 & d7$cohen.kappa<=0.4,]),
+                 "  Fair \n ck(0.4,0.6] = ",nrow(d7[d7$cohen.kappa>0.4 &d7$cohen.kappa<=0.6,]),
+                 "  Moderate \n ck(0.6,0.8] = ",nrow(d7[d7$cohen.kappa>0.6 & d7$cohen.kappa<=0.8,]),
+                 "  Sustantial \n ck(0.8,1] = ",nrow(d7[d7$cohen.kappa>0.8 &d7$cohen.kappa<=1,]),"  Perfect")) +
+  xlab("Genes") + ylab("Cohen's Kappa")+
+  theme_classic() +
+  theme(axis.text.x=element_blank(),
+      axis.ticks.x=element_blank())
+}
+
+for (vvv in 2:46){
+plot(p[[vvv]])
+}
+```
+
