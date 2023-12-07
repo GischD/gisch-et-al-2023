@@ -1,0 +1,16 @@
+#Fig2I
+#Bulk
+#ATAC heatmap by annotation
+
+computeMatrix reference-point --referencePoint center -b 4000 -a 4000 -R ATAC.DNAme.Hypo.Promoters.bed ATAC.DNAme.Hypo.Enhancers.bed ATAC.DNAme.Hypo.Exons.bed ATAC.DNAme.Hypo.Introns.bed ATAC.DNAme.Hypo.Other.bed -S /Volumes/Mobius/Rauchman/Rauchman.KPMP.final.files/Corr.DNAme.new/hg38_total_methylation_Ti.bw /Volumes/Mobius/Rauchman/Rauchman.KPMP.final.files/ENCODE.ADULT.KINDEY/ENCFF395HGS.bulk.ATACseq.47yo.female.kidney.fold.change.over.control.bigWig /Volumes/Mobius/Rauchman/Rauchman.KPMP.final.files/H3K4me3.merge/H3K4me3.20.Rep1_2_3.merge.norm.bw /Volumes/Mobius/Rauchman/Rauchman.KPMP.final.files/H3K4me1.merge/H3K4me1.20.Rep1_2_3.merge.norm.bw /Volumes/Mobius/Rauchman/Rauchman.KPMP.final.files/H3K27Ac.merge/H3K27Ac.20.Rep1_Rep2_Rep3.KTRC.A_B_D.merge.norm.bw /Volumes/Mobius/Rauchman/Rauchman.KPMP.final.files/H3K27me3.merge/H3K27me3.20.Rep1_Rep2_Rep3.687_688_LN2_OCT.KTRC.A_B_D.merge.norm.bw --samplesLabel DNAme.TI bulk.ATAC H3K4me3 H3K4me1 H3K27Ac H3K27me3 --skipZeros -o matrix_ATAC.DNAmePeak_HistoneLandscape_byAnnotation.4kb.gz --outFileSortedRegions matrix_ATAC.DNAmePeak_HistoneLandscape_byAnnotation.4kb.bed
+
+plotHeatmap -m matrix_ATAC.DNAmePeak_HistoneLandscape_byAnnotation.4kb.gz -out ATAC.DNAmePeak_HistoneLandscape_byAnnotation.4kb.Heatmap.pdf --colorMap gray Blues Greens Blues Greens Reds -x distance --yMin 0 --yMax 1 10 45 10 15 10 -z Promoters Enhancers Exons Introns Other --zMin 0 --zMax 1 10 45 10 15 10 --missingDataColor white
+
+
+#Figure3K
+#PTS12a
+#ATAC heatmap by annotation
+
+computeMatrix reference-point --referencePoint center -b 4000 -a 4000 -R peaks.PT12a.Pro.bed peaks.PT12a.Enh.bed peaks.PT12a.Exon.bed peaks.PT12a.Intron.bed peaks.PT12a.Other.bed -S /Volumes/Mobius/Rauchman/Rauchman.KPMP.final.files/Corr.DNAme.new/bigwigs/hg38_total_methylation_Ti.bw /Volumes/Mobius/Rauchman/Rauchman.KPMP.final.files/H3K4me3.merge/H3K4me3.20.Rep1_2_3.merge.norm.bw /Volumes/Mobius/Rauchman/Rauchman.KPMP.final.files/H3K4me1.merge/H3K4me1.20.Rep1_2_3.merge.norm.bw /Volumes/Mobius/Rauchman/Rauchman.KPMP.final.files/H3K27Ac.merge/H3K27Ac.20.Rep1_Rep2_Rep3.KTRC.A_B_D.merge.norm.bw /Volumes/Mobius/Rauchman/Rauchman.KPMP.final.files/H3K27me3.merge/H3K27me3.20.Rep1_Rep2_Rep3.687_688_LN2_OCT.KTRC.A_B_D.merge.norm.bw --samplesLabel DNAme.TI H3K4me3 H3K4me1 H3K27Ac H3K27me3 --skipZeros -o matrix_PTS12.ATAC_CutRun_DNAme_byAnnotation.4kb.gz --outFileSortedRegions matrix_PTS12.ATAC_CutRun_DNAme_byAnnotation.4kb.bed
+
+plotHeatmap -m matrix_PTS12.ATAC_CutRun_DNAme_byAnnotation.4kb.gz -out PTS12.ATAC_CutRun_DNAme_byAnnotation.4kb.Heatmap.pdf --colorMap gray Greens Blues Greens Reds -x distance --yMin 0 --yMax 1 45 10 15 10 -z Promoters Enhancers Exons Introns Other --zMin 0 --zMax 1 45 10 15 10 --missingDataColor white

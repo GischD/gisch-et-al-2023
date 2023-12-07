@@ -1,0 +1,131 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Step 1 SEURAT to CDS R cicero program call 
+https://morris-lab.github.io/CellOracle.documentation/notebooks/01_ATAC-seq_data_processing/option1_scATAC-seq_data_analysis_with_cicero/01_atacdata_analysis_with_cicero_and_monocle3.html
+```{r}
+library(Seurat)
+library(Signac)
+library(SeuratDisk)
+library(SeuratData)
+library(monocle3)
+library(cicero)
+```
+```{r}
+obj <- readRDS("scMEGA_cor40_multiome_subset_aPTxPTS12.RDS")
+obj[['ATAC']] <- obj[['peaks']]
+DefaultAssay(obj) <- "RNA"
+obj[['peaks']] <- NULL
+obj@assays$RNA@counts
+```
+
+```{r}
+#Building the input MATRIX for cicero
+m_indata <- obj@assays$ATAC@counts
+# Binarize the matrix
+m_indata@x[m_indata@x > 0] <- 1
+nrow(m_indata)
+ncol(m_indata)
+m_cellinfo <- data.frame(colnames(obj@assays$ATAC@counts))
+names(m_cellinfo) <- "cells"
+row.names(m_cellinfo) <- m_cellinfo$cells
+
+
+m_peakinfo <- data.frame(rownames(obj@assays$ATAC@counts))
+names(m_peakinfo) <- "V1"
+m_peakinfo$V2 <- stringr::str_split(m_peakinfo$V1,pattern = "-",simplify = TRUE)[,2]
+m_peakinfo$V3 <- stringr::str_split(m_peakinfo$V1,pattern = "-",simplify = TRUE)[,3]
+m_peakinfo$V1 <- stringr::str_split(m_peakinfo$V1,pattern = "-",simplify = TRUE)[,1]
+
+names(m_peakinfo) <- c("chr", "bp1", "bp2")
+m_peakinfo$site_name <- paste(m_peakinfo$chr, m_peakinfo$bp1, m_peakinfo$bp2, sep="_")
+row.names(m_peakinfo) <- m_peakinfo$site_name
+
+row.names(m_indata) <- row.names(m_peakinfo)
+colnames(m_indata) <- row.names(m_cellinfo)
+
+# Make CDS
+input_cds <-  suppressWarnings(new_cell_data_set(m_indata,
+cell_metadata = m_cellinfo,
+gene_metadata = m_peakinfo))
+input_cds <- monocle3::detect_genes(input_cds)
+
+#Ensure there are no peaks included with zero reads
+input_cds <- input_cds[Matrix::rowSums(exprs(input_cds)) != 0,]
+```
+
+```{r}
+# Visualize peak_count_per_cell
+mean(Matrix::colSums(exprs(input_cds)))
+max(Matrix::colSums(exprs(input_cds)))
+min(Matrix::colSums(exprs(input_cds)))
+sd(Matrix::colSums(exprs(input_cds)))
+```
+```{r}
+# Filter cells by peak_count
+# Please set an appropriate threshold values according to your data
+max_count <-  15000
+min_count <- 2000
+input_cds <- input_cds[,Matrix::colSums(exprs(input_cds)) >= min_count]
+input_cds <- input_cds[,Matrix::colSums(exprs(input_cds)) <= max_count]
+```
+
+4. Process Cicero-CDS object
+```{r}
+# Data preprocessing
+set.seed(2017)
+
+input_cds <- detect_genes(input_cds)
+input_cds <- estimate_size_factors(input_cds)
+input_cds <- preprocess_cds(input_cds, method = "LSI")
+
+
+# Dimensional reduction with umap
+input_cds <- reduce_dimension(input_cds, reduction_method = 'UMAP',
+                              preprocess_method = "LSI")
+umap_coords <- reducedDims(input_cds)$UMAP
+
+plot_cells(input_cds)
+```
+
+
+```{r}
+cicero_cds <- make_cicero_cds(input_cds, reduced_coordinates = umap_coords)
+```
+
+
+```{r}
+# Save Cds object (Optional)
+dir.create("aPTxPT_scMEGA")
+output_folder <- "aPTxPT_scMEGA"
+saveRDS(cicero_cds, paste0(output_folder, "/cicero_cds.Rds"))
+```
+
+```{r}
+#https://hgdownload.cse.ucsc.edu/goldenpath/hg38/bigZips/
+chromosome_length <- read.table("../genomes_homo_sapiens_GRCh38/hg38.chrom.sizes")
+order_chr <- c("chr1","chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY")
+chromosome_length <- chromosome_length[chromosome_length$V1 %in% order_chr,]
+chromosome_length <- chromosome_length %>% arrange(factor(chromosome_length$V1, levels = order_chr))
+```
+
+6. Run Cicero
+```{r}
+# Run the main function
+conns <- run_cicero(cicero_cds, chromosome_length) # Takes a few minutes to run
+# Save results (Optional)
+saveRDS(conns, paste0(output_folder, "/cicero_connections.Rds"))
+# Check results
+head(conns)
+```
+
+
+```{r}
+all_peaks <- row.names(exprs(input_cds))
+write.csv(x = all_peaks, file = paste0(output_folder, "/all_peaks.csv"))
+write.csv(x = conns, file = paste0(output_folder, "/cicero_connections.csv"))
+```
+
+

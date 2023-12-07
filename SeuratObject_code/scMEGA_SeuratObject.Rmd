@@ -1,0 +1,325 @@
+---
+title: "scMEGA SeuratObject"
+output: html_notebook
+---
+
+The code is for aPTxPT but the method is the same to aTALxC-TAL
+
+```{r}
+suppressMessages(library(ArchR))
+suppressMessages(library(Seurat))
+suppressMessages(library(Signac))
+suppressMessages(library(scMEGA))
+suppressMessages(library(harmony))
+suppressMessages(library(Nebulosa))
+suppressMessages(library(BSgenome.Hsapiens.UCSC.hg38))
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+suppressMessages(library(JASPAR2020))
+suppressMessages(library(TFBSTools))
+suppressMessages(library(igraph))
+suppressMessages(library(ggraph))
+```
+The seurat object is a subset for aPTxPTS12 following the script generate.PT.TAL.objects.r 
+```{r}
+output <- "./"
+ori <- readRDS("multiome_aPTxPT.rds")
+obj <-ori
+b.inputpath <- "../ATAC/blue/" #fragment files pathway 
+frags <- Fragments(obj)  # get list of fragment objects
+# remove fragment information from assay
+new.paths <- list.files(b.inputpath,pattern='10X_Dual')
+for (i in seq_along(frags)) {
+  frags[[i]] <- UpdatePath(frags[[i]], new.path = paste0(b.inputpath,new.paths[[i]],'/atac_fragments.tsv.gz')) # update path
+}
+Fragments(obj) <- NULL
+Fragments(obj) <- frags # assign updated list back to the object
+obj[['ATAC']] <- obj[['peaks']]
+```
+
+```{r}
+#colors
+cols <- c("#467a3c","#A82400","#F03B00" ) #aPT PT-S1 and PT-S2
+set.seed(1234)
+```
+
+```{r}
+obj <- RunHarmony(
+  obj,
+  group.by.vars = c("specimen"),
+  reduction = "pca",
+  max.iter.harmony = 30,
+  dims.use = 1:30,
+  project.dim = FALSE,
+  plot_convergence = FALSE
+)
+```
+```{r}
+obj <- RunUMAP(
+  obj,
+  dims = 1:30,
+  reduction = 'harmony',
+  reduction.name = "umap_harmony",
+  reduction.ke = 'umapharmony_',
+  verbose = FALSE,
+  min.dist = 0.4
+)
+```
+```{r}
+DefaultAssay(obj) <- 'RNA'
+
+p1 <-
+  DimPlot(obj, group.by = "specimen", reduction = "umap_harmony")
+p2 <-
+  DimPlot(obj, group.by = "subclass.l3", reduction = "umap_harmony",cols = cols)
+p1+p2
+```
+
+```{r}
+DefaultAssay(obj) <- 'RNA'
+  p0 <- plot_density(obj,
+               features = "TPM1",
+               reduction = "umap_harmony",
+               pal = "magma")
+```
+
+
+Trajectory analysis
+```{r}
+# DefaultAssay(obj) <- 'ATAC'
+# obj <- RunDiffusionMap(obj, reduction = "harmony",reduction.name = "diff.atac")
+
+DefaultAssay(obj) <- 'RNA'
+obj<- RunDiffusionMap(obj, reduction = "harmony")
+
+DimPlot(obj, group.by = "subclass.l3", label = TRUE,
+             reduction = "dm", shuffle = TRUE, cols =cols ) 
+
+```
+```{r}
+p0 <- plot_density(obj,
+               features = "RXRA",
+               reduction = "dm",
+               pal = "magma")
+
+p0
+```
+```{r}
+obj <- AddTrajectory(object = obj,
+                          trajectory = c("PT-S1","PT-S2","aPT"),
+                          name="Trajectory",
+                          group.by = "subclass.l3",
+                          reduction = "umap_harmony",
+                          #dims = 1:2,
+                          use.all = TRUE)
+obj <- obj[, !is.na(obj$Trajectory)] #lost some cells
+```
+
+```{r}
+p2 <- TrajectoryPlot(object = obj,trajectory ="Trajectory",
+                    reduction = "dm",
+                    continuousSet = "blueYellow",
+                    size = 1,
+                   addArrow = FALSE) +
+    xlab("DC 1") + ylab("DC 2") +
+    ggtitle("Trajectory")
+
+plot(p2)
+
+```
+```{r}
+
+DefaultAssay(obj) <- 'RNA'
+  p0 <- plot_density(obj,
+               features = "TPM1",
+               reduction = "dm",
+               pal = "magma")
+p0
+```
+
+
+
+```{r}
+
+# # Get a list of motif position frequency matrices from the JASPAR database
+pfm <- getMatrixSet(
+  x = JASPAR2020,
+  opts = list(collection = "CORE", tax_group = 'vertebrates', all_versions = FALSE)
+)
+
+# add motif information
+obj <- AddMotifs(
+  object = obj,
+  genome = BSgenome.Hsapiens.UCSC.hg38,
+  pfm = pfm,
+    assay = "ATAC"
+)
+
+
+saveRDS(obj,paste0("Jun23_before_RUNChromavar.RDS"))
+#obj <- readRDS("before_RUNChromavar.RDS")
+```
+
+```{r}
+
+obj <- RunChromVAR(
+  object = obj,
+  genome = BSgenome.Hsapiens.UCSC.hg38,
+    assay = "ATAC"
+)
+
+```
+Select TF
+We can visualize the TF activity dynamic along the trajectory
+```{r,fig.height=8}
+TFGE <- list()
+
+res <- SelectTFs(object = obj, return.heatmap = TRUE)
+
+df.cor <- res$tfs
+TFGE[["df.cor_tfs"]] <- df.cor
+#write.csv(df.cor, file=paste0("df.cor.TF.activity.dynamic.along.thetrajectory.csv"),row.names = T)
+ht <- res$heatmap
+
+#TF_activity_gene_expression
+ht
+
+```
+Select genes
+
+We will select relevant genes by first linking genes to peaks based on the corrleation between gene expression from the snRNA-seq data and peak accessibility from the snATAC-seq data along the inferred trajectory. This means that we only consider a gene to be a potential target if it can be assocaited to at least one peak.
+```{r}
+res <- SelectGenes(object = obj,
+                  labelTop1 = 0,
+                  labelTop2 = 0)
+
+## Creating Trajectory Group Matrix..
+
+## Smoothing...
+
+## Creating Trajectory Group Matrix..
+
+## Smoothing...
+
+## Linking cis-regulatory elements to genes...
+
+SelectGENES <- list()
+
+
+df.p2g <- res$p2g
+ht <- res$heatmap
+
+SelectGENES[["df.p2g"]] <- df.p2g
+teste <- data.frame(ht@ht_list[["Chromatin accessibility"]]@matrix)
+teste$rowname <- rownames(teste)
+
+SelectGENES[["Chromatin_Accessibility"]] <- teste 
+
+teste <- data.frame(ht@ht_list[["Gene expression"]]@matrix)
+teste$rowname <- rownames(teste)
+SelectGENES[["Gene_Expression"]] <- teste
+
+
+#rio::export(SelectGENES, file = "SelectGENES_and_Peaks_correlation_with_peseudo_time.xlsx")
+
+
+#Corralation peak to gene
+draw(ht)
+```
+
+
+
+#Gene regulatory network inference
+
+We here will try to predict a gene regulatory
+network based on the correlation of the TF binding 
+activity as estimated from snATAC-seq and gene 
+expression as measured by snRNA-seq along the trajectory.
+```{r}
+tf.gene.cor <- GetTFGeneCorrelation(object = obj, 
+                                    tf.use = df.cor$tfs, 
+                                    gene.use = unique(df.p2g$gene),
+                                    tf.assay = "chromvar", 
+                                    gene.assay = "RNA",
+                                    trajectory.name = "Trajectory")
+# write.csv(tf.gene.cor, file=paste0("tf.gene.cor.csv"),row.names=TRUE)
+
+
+TFGenecor <- list()
+
+TFGenecor[["TF_gene_cor"]] <- tf.gene.cor
+```
+We can then visualize this correlation matrix by heatmap.
+Also, we can cluster the genes and TFs to identify 
+different regulatory modules for the predefined sub-populations.
+```{r,fig.width=20}
+ht <- GRNHeatmap(tf.gene.cor, 
+                 tf.timepoint = df.cor$time_point)
+
+
+teste <- data.frame(ht@matrix)
+teste$rowname <- rownames(teste)
+TFGenecor[["TF_gene_cor_matrix"]] <- teste
+
+
+#tf to gene correlation
+ht
+```
+
+To associate genes to TFs, we will use the peak-to-gene links and 
+TF binding sites information. Specifically, if a gene is regulated 
+by a peak and this peak is bound by a TF, then we consider this gene to be a target of this TF.
+```{r}
+motif.matching <- obj@assays$ATAC@motifs@data
+colnames(motif.matching) <- obj@assays$ATAC@motifs@motif.names
+motif.matching <-
+    motif.matching[unique(df.p2g$peak), unique(tf.gene.cor$tf)]
+
+df.grn <- GetGRN(motif.matching = motif.matching, 
+                 df.cor = tf.gene.cor, 
+                 df.p2g = df.p2g)
+
+TFGenecor[["motif_match_TFGE_and_DADE"]] <- df.grn
+#write.csv(df.grn, file=paste0("network_motif_matchcorr_with_TFandgene_DAandDE.csv"),row.names=F)
+
+```
+
+
+Next, we can visualize our network as the last step of this analysis
+define colors for nodes representing TFs (i.e., regulators)
+```{r}
+
+df.cor <- df.cor[order(df.cor$time_point), ]
+tfs.timepoint <- df.cor$time_point
+
+names(tfs.timepoint) <- df.cor$tfs
+
+```
+plot the graph, here we can highlight some genes
+```{r}
+df.grn2 <- df.grn %>%
+    subset(correlation > 0.9) %>%
+    select(c(tf, gene, correlation)) %>%
+    rename(weights = correlation)
+
+
+TFGenecor[["TF_Gene_weights_90"]] <- df.grn2 #Spatial Transcriptomic plot cor 90%
+
+
+df.grn2 <- df.grn %>%
+    subset(correlation > 0.4) %>%
+    select(c(tf, gene, correlation)) %>%
+    rename(weights = correlation)
+
+
+TFGenecor[["TF_Gene_weights_40"]] <- df.grn2
+```
+
+
+```{r}
+DefaultAssay(obj) <-"RNA"
+obj <- AddTargetAssay(object = obj, df.grn = df.grn2)
+Links(obj) <- Links(ori)
+saveRDS(obj,"scMEGA_cor40_multiome_subset_aPTxPTS12.RDS")
+```
+
